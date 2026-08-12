@@ -262,9 +262,77 @@
     const role = user.role;
     const unreadCount = state.notifications.filter(n => !n.read).length;
 
+    let navItemsHTML = '';
+    let actionBtnHTML = '';
+
+    if (role === 'ADMIN') {
+      navItemsHTML = `
+        <div class="nav-item ${state.adminTab === 'dashboard' ? 'active' : ''}" onclick="switchTab('dashboard')">
+          <i data-lucide="layout-dashboard"></i> Dashboard
+        </div>
+        <div class="nav-item ${state.adminTab === 'directory' ? 'active' : ''}" onclick="switchTab('directory')">
+          <i data-lucide="users"></i> Resident Directory
+        </div>
+        <div class="nav-item ${state.adminTab === 'guards' ? 'active' : ''}" onclick="switchTab('guards')">
+          <i data-lucide="user-check"></i> Guard Roster
+        </div>
+        <div class="nav-item ${state.adminTab === 'logs' ? 'active' : ''}" onclick="switchTab('logs')">
+          <i data-lucide="file-text"></i> Visitor Logs
+        </div>
+        <div class="nav-item ${state.adminTab === 'alerts' ? 'active' : ''}" onclick="switchTab('alerts')">
+          <i data-lucide="shield-alert"></i> Security Alerts
+        </div>
+        <div class="nav-item ${state.adminTab === 'settings' ? 'active' : ''}" onclick="switchTab('settings')">
+          <i data-lucide="settings"></i> Settings
+        </div>
+      `;
+      actionBtnHTML = `
+        <button class="sidebar-action-btn" onclick="openAddUserModal('RESIDENT')">
+          <i data-lucide="user-plus"></i> + Add Resident
+        </button>
+      `;
+    } else if (role === 'GUARD') {
+      navItemsHTML = `
+        <div class="nav-item ${state.adminTab === 'dashboard' || state.adminTab === 'entry' ? 'active' : ''}" onclick="switchTab('dashboard')">
+          <i data-lucide="user-plus"></i> Register Visitor
+        </div>
+        <div class="nav-item ${state.adminTab === 'queue' ? 'active' : ''}" onclick="switchTab('queue')">
+          <i data-lucide="clock"></i> Pending Queue
+        </div>
+        <div class="nav-item ${state.adminTab === 'logs' ? 'active' : ''}" onclick="switchTab('logs')">
+          <i data-lucide="file-text"></i> Visitor History
+        </div>
+      `;
+      actionBtnHTML = `
+        <button class="sidebar-action-btn" onclick="openRegisterVisitorModal()">
+          <i data-lucide="user-plus"></i> + Register Visitor
+        </button>
+      `;
+    } else if (role === 'RESIDENT') {
+      navItemsHTML = `
+        <div class="nav-item ${state.adminTab === 'dashboard' ? 'active' : ''}" onclick="switchTab('dashboard')">
+          <i data-lucide="radio"></i> Live Visitor Alerts
+        </div>
+        <div class="nav-item ${state.adminTab === 'logs' ? 'active' : ''}" onclick="switchTab('logs')">
+          <i data-lucide="history"></i> My Visitor Log
+        </div>
+        <div class="nav-item ${state.adminTab === 'passes' ? 'active' : ''}" onclick="openManagePassesModal()">
+          <i data-lucide="qr-code"></i> Pre-Approved Passes
+        </div>
+        <div class="nav-item ${state.adminTab === 'issue' ? 'active' : ''}" onclick="openReportProblemModal()">
+          <i data-lucide="alert-triangle"></i> Report Issue
+        </div>
+      `;
+      actionBtnHTML = `
+        <button class="sidebar-action-btn" style="background:var(--accent-teal);" onclick="openManagePassesModal()">
+          <i data-lucide="qr-code"></i> + Guest Pass
+        </button>
+      `;
+    }
+
     return `
       <div class="dashboard-layout">
-        <!-- Desktop Light Sidebar (Exact Mockup Match) -->
+        <!-- Desktop Light Sidebar (Exact Match to Mockup) -->
         <aside class="sidebar" id="app-sidebar">
           <div class="sidebar-brand">
             <div class="brand-icon"><i data-lucide="shield"></i></div>
@@ -275,30 +343,11 @@
           </div>
 
           <nav class="sidebar-nav">
-            <div class="nav-item ${state.adminTab === 'dashboard' ? 'active' : ''}" onclick="switchTab('dashboard')">
-              <i data-lucide="layout-dashboard"></i> Dashboard
-            </div>
-            <div class="nav-item ${state.adminTab === 'logs' ? 'active' : ''}" onclick="switchTab('logs')">
-              <i data-lucide="file-text"></i> Visitor Logs
-            </div>
-            <div class="nav-item ${state.adminTab === 'directory' ? 'active' : ''}" onclick="switchTab('directory')">
-              <i data-lucide="users"></i> Resident Directory
-            </div>
-            <div class="nav-item ${state.adminTab === 'guards' ? 'active' : ''}" onclick="switchTab('guards')">
-              <i data-lucide="user-check"></i> Guard Roster
-            </div>
-            <div class="nav-item ${state.adminTab === 'alerts' ? 'active' : ''}" onclick="switchTab('alerts')">
-              <i data-lucide="shield-alert"></i> Security Alerts
-            </div>
-            <div class="nav-item ${state.adminTab === 'settings' ? 'active' : ''}" onclick="switchTab('settings')">
-              <i data-lucide="settings"></i> Settings
-            </div>
+            ${navItemsHTML}
           </nav>
 
           <div class="sidebar-footer">
-            <button class="sidebar-action-btn" onclick="openRegisterVisitorModal()">
-              <i data-lucide="user-plus"></i> + Register Visitor
-            </button>
+            ${actionBtnHTML}
             <div class="sidebar-secondary-link" onclick="openHelpModal()">
               <i data-lucide="help-circle"></i> Help Center
             </div>
@@ -322,7 +371,7 @@
             <div class="header-actions">
               <div class="role-switcher-pill ${role}" onclick="cycleRoleDemo()">
                 <i data-lucide="${role === 'ADMIN' ? 'shield' : role === 'GUARD' ? 'shield-check' : 'home'}" style="width:14px; height:14px;"></i>
-                <span>${role === 'GUARD' ? 'GATE 1 - GUARD' : role === 'RESIDENT' ? 'Resident' : 'Admin'}</span>
+                <span>${role === 'GUARD' ? 'GATE 1 - GUARD' : role === 'RESIDENT' ? 'RESIDENT' : 'ADMIN'} (Switch Role)</span>
               </div>
 
               <div class="notification-bell" onclick="toggleNotificationDrawer()">
@@ -339,19 +388,19 @@
 
           <!-- Notification Drawer Dropdown -->
           ${state.notificationDrawerOpen ? `
-            <div class="notification-drawer">
-              <div class="drawer-header">
-                <span class="drawer-title">Notifications (${state.notifications.length})</span>
+            <div class="notification-drawer" style="position:absolute; right:80px; top:64px; background:white; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 10px 25px rgba(0,0,0,0.15); width:320px; z-index:100; padding:16px;">
+              <div class="drawer-header" style="display:flex; justify-content:space-between; margin-bottom:12px;">
+                <span class="drawer-title" style="font-weight:700; font-size:14px;">Notifications (${state.notifications.length})</span>
                 <span style="font-size:11px; color:var(--primary-blue); cursor:pointer; font-weight:600;" onclick="markNotificationsRead()">Mark all read</span>
               </div>
-              <div class="drawer-body">
-                ${state.notifications.map(n => `
-                  <div class="drawer-item">
-                    <div style="font-weight:700; color:#1e293b; display:flex; justify-content:space-between;">
+              <div class="drawer-body" style="max-height:260px; overflow-y:auto;">
+                ${state.notifications.length === 0 ? '<div style="font-size:12px; color:var(--text-muted); text-align:center; padding:12px;">No new notifications</div>' : state.notifications.map(n => `
+                  <div class="drawer-item" style="padding:8px 0; border-bottom:1px solid #f1f5f9;">
+                    <div style="font-weight:700; font-size:12px; color:#1e293b; display:flex; justify-content:space-between;">
                       <span>${n.title}</span>
                       <span style="font-size:10px; color:var(--text-muted);">${n.time}</span>
                     </div>
-                    <div style="color:var(--text-muted); margin-top:2px;">${n.message}</div>
+                    <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${n.message}</div>
                   </div>
                 `).join('')}
               </div>
@@ -367,17 +416,17 @@
 
         <!-- Mobile Bottom Navigation -->
         <nav class="mobile-bottom-nav">
-          <div class="mobile-nav-btn ${state.activeView === 'admin' ? 'active' : ''}" onclick="switchView('admin')">
-            <i data-lucide="home"></i> Home
+          <div class="mobile-nav-btn ${role === 'ADMIN' ? 'active' : ''}" onclick="quickLogin('admin', 'admin123')">
+            <i data-lucide="shield"></i> Admin
           </div>
-          <div class="mobile-nav-btn ${state.activeView === 'guard' ? 'active' : ''}" onclick="switchView('guard')">
-            <i data-lucide="file-text"></i> Logs
+          <div class="mobile-nav-btn ${role === 'GUARD' ? 'active' : ''}" onclick="quickLogin('guard', 'guard123')">
+            <i data-lucide="shield-check"></i> Guard
           </div>
           <div class="mobile-fab-center" onclick="openRegisterVisitorModal()">
             <i data-lucide="plus" style="width:24px; height:24px;"></i>
           </div>
-          <div class="mobile-nav-btn ${state.activeView === 'resident' ? 'active' : ''}" onclick="switchView('resident')">
-            <i data-lucide="users"></i> Visitors
+          <div class="mobile-nav-btn ${role === 'RESIDENT' ? 'active' : ''}" onclick="quickLogin('resident', 'resident123')">
+            <i data-lucide="home"></i> Resident
           </div>
           <div class="mobile-nav-btn" onclick="openProfileModal()">
             <i data-lucide="user"></i> Profile
@@ -620,10 +669,7 @@
                 <div class="form-group">
                   <label>Visiting Flat / House</label>
                   <select id="vis-destination" class="form-control">
-                    <option value="402|A">Flat 402 - Block A</option>
-                    <option value="204|A">Flat 204 - Block A</option>
-                    <option value="101|B">Flat 101 - Block B</option>
-                    <option value="05|West">Villa 05 - West</option>
+                    ${state.residents.length === 0 ? '<option value="">No residents registered</option>' : state.residents.map(r => `<option value="${r.flat.includes('-') ? r.flat.split('-')[1] : r.flat}|${r.flat.includes('-') ? r.flat.split('-')[0] : 'A'}">Flat ${r.flat} (${r.name})</option>`).join('')}
                   </select>
                 </div>
                 <div class="form-group">
@@ -1400,7 +1446,33 @@
   };
 
   window.openRegisterVisitorModal = function () {
-    switchView('guard');
+    if (state.currentUser && state.currentUser.role !== 'GUARD') {
+      showToast('Only Security Guards can register gate visitors. Switched to Guard Terminal.', 'info');
+      quickLogin('guard', 'guard123');
+    } else {
+      switchView('guard');
+      setTimeout(() => {
+        const input = document.getElementById('vis-name');
+        if (input) input.focus();
+      }, 100);
+    }
+  };
+
+  window.toggleMobileSidebar = function () {
+    const sidebar = document.getElementById('app-sidebar');
+    if (sidebar) sidebar.classList.toggle('mobile-open');
+  };
+
+  window.toggleNotificationDrawer = function () {
+    state.notificationDrawerOpen = !state.notificationDrawerOpen;
+    render();
+  };
+
+  window.markNotificationsRead = function () {
+    state.notifications.forEach(n => n.read = true);
+    state.notificationDrawerOpen = false;
+    showToast('All notifications marked as read', 'info');
+    render();
   };
 
   window.openHelpModal = function () {
