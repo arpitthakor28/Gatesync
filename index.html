@@ -2,13 +2,37 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="0; url=src/main/resources/static/index.html">
-  <title>GateSync Application</title>
-  <script>
-    window.location.href = "src/main/resources/static/index.html";
-  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GateSync - Smart Society Visitor Management System</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Lucide Icons & SockJS / Stomp for WebSockets -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="./css/styles.css">
 </head>
 <body>
-  <p>Redirecting to <a href="src/main/resources/static/index.html">GateSync Application</a>...</p>
+
+  <!-- Toast Notification Root -->
+  <div id="toast-container"></div>
+
+  <!-- Audio Chime Player for Resident Notifications -->
+  <audio id="alert-sound" preload="auto" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+
+  <!-- Application Root -->
+  <div id="app-container"></div>
+
+  <!-- WebRTC Camera Capture Modal Root -->
+  <div id="camera-modal-container"></div>
+
+  <!-- Quick Modal Container Root -->
+  <div id="modal-container"></div>
+
+  <!-- Core JavaScript Application Logic -->
+  <script src="./js/app.js"></script>
 </body>
 </html>
