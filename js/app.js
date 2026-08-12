@@ -1612,8 +1612,247 @@
     lucide.createIcons();
   };
 
-  window.openAddUserModal = function () {
-    showToast('Add resident form open', 'info');
+  window.openAddUserModal = function (type = 'RESIDENT') {
+    const container = document.getElementById('modal-container');
+    container.innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h3 style="font-family:var(--font-heading); font-size:16px; font-weight:700; color:var(--primary-blue);">
+              <i data-lucide="user-plus"></i> Add New ${type === 'RESIDENT' ? 'Resident' : 'User'}
+            </h3>
+            <i data-lucide="x" style="cursor:pointer;" onclick="closeModal()"></i>
+          </div>
+          <form id="add-user-modal-form">
+            <div class="modal-body">
+              <div class="form-group" style="margin-bottom:12px;">
+                <label>Full Name</label>
+                <input type="text" id="au-name" class="form-control" placeholder="e.g. Ramesh Shah" required>
+              </div>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Block Letter</label>
+                  <select id="au-block" class="form-control">
+                    <option value="A">Block A</option>
+                    <option value="B">Block B</option>
+                    <option value="C">Block C</option>
+                    <option value="D">Block D</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Flat Number</label>
+                  <input type="text" id="au-flat" class="form-control" placeholder="e.g. 302" required>
+                </div>
+              </div>
+              <div class="form-group" style="margin-bottom:12px;">
+                <label>Contact Phone (+91)</label>
+                <input type="tel" id="au-phone" class="form-control" placeholder="+91 98765 43210" required>
+              </div>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Login Username</label>
+                  <input type="text" id="au-login" class="form-control" placeholder="e.g. res_a302" required>
+                </div>
+                <div class="form-group">
+                  <label>Initial Password</label>
+                  <input type="password" id="au-password" class="form-control" placeholder="••••••••" value="password123" required>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+              <button type="submit" class="btn btn-primary"><i data-lucide="check-circle"></i> Save Resident</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+    lucide.createIcons();
+
+    document.getElementById('add-user-modal-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = document.getElementById('au-name').value;
+      const block = document.getElementById('au-block').value;
+      const flatNum = document.getElementById('au-flat').value;
+      const phone = document.getElementById('au-phone').value;
+      const loginId = document.getElementById('au-login').value;
+      const flatStr = `${block}-${flatNum}`;
+      const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+
+      const newRes = {
+        id: Date.now(),
+        name,
+        initials,
+        flat: flatStr,
+        loginId,
+        phone,
+        backupPhone: '',
+        status: 'Active',
+        avatarBg: 'blue'
+      };
+
+      state.residents.unshift(newRes);
+      closeModal();
+      showToast(`Resident ${name} (Flat ${flatStr}) added successfully!`, 'success');
+      render();
+    });
+  };
+
+  window.openEditResidentModal = function (id) {
+    const r = state.residents.find(res => res.id === id);
+    if (!r) return;
+    const container = document.getElementById('modal-container');
+    container.innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h3 style="font-family:var(--font-heading); font-size:16px; font-weight:700;">Edit Resident: ${r.name}</h3>
+            <i data-lucide="x" style="cursor:pointer;" onclick="closeModal()"></i>
+          </div>
+          <form id="edit-resident-form">
+            <div class="modal-body">
+              <div class="form-group" style="margin-bottom:12px;">
+                <label>Full Name</label>
+                <input type="text" id="er-name" class="form-control" value="${r.name}" required>
+              </div>
+              <div class="form-group" style="margin-bottom:12px;">
+                <label>Flat Number</label>
+                <input type="text" id="er-flat" class="form-control" value="${r.flat}" required>
+              </div>
+              <div class="form-group" style="margin-bottom:12px;">
+                <label>Phone Number</label>
+                <input type="tel" id="er-phone" class="form-control" value="${r.phone}" required>
+              </div>
+              <div class="form-group">
+                <label>Account Status</label>
+                <select id="er-status" class="form-control">
+                  <option value="Active" ${r.status === 'Active' ? 'selected' : ''}>Active</option>
+                  <option value="Inactive" ${r.status === 'Inactive' ? 'selected' : ''}>Inactive</option>
+                </select>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+              <button type="submit" class="btn btn-primary">Update Resident</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+    lucide.createIcons();
+
+    document.getElementById('edit-resident-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      r.name = document.getElementById('er-name').value;
+      r.flat = document.getElementById('er-flat').value;
+      r.phone = document.getElementById('er-phone').value;
+      r.status = document.getElementById('er-status').value;
+      closeModal();
+      showToast(`Resident ${r.name} updated!`, 'success');
+      render();
+    });
+  };
+
+  window.confirmDeleteResident = function (id) {
+    const r = state.residents.find(res => res.id === id);
+    if (!r) return;
+    if (confirm(`Are you sure you want to remove resident ${r.name} (${r.flat})?`)) {
+      state.residents = state.residents.filter(res => res.id !== id);
+      showToast(`Resident ${r.name} removed`, 'info');
+      render();
+    }
+  };
+
+  window.openAddGuardModal = function () {
+    const container = document.getElementById('modal-container');
+    container.innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h3 style="font-family:var(--font-heading); font-size:16px; font-weight:700; color:var(--primary-blue);">Add Security Guard</h3>
+            <i data-lucide="x" style="cursor:pointer;" onclick="closeModal()"></i>
+          </div>
+          <form id="add-guard-form">
+            <div class="modal-body">
+              <div class="form-group" style="margin-bottom:12px;">
+                <label>Guard Full Name</label>
+                <input type="text" id="ag-name" class="form-control" placeholder="e.g. Bahadur Thapa" required>
+              </div>
+              <div class="form-group" style="margin-bottom:12px;">
+                <label>Phone Number (+91)</label>
+                <input type="tel" id="ag-phone" class="form-control" placeholder="+91 98123 45678" required>
+              </div>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Assigned Shift</label>
+                  <select id="ag-shift" class="form-control">
+                    <option value="DAY">DAY Shift (8 AM - 8 PM)</option>
+                    <option value="NIGHT">NIGHT Shift (8 PM - 8 AM)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Assigned Gate Station</label>
+                  <select id="ag-gate" class="form-control">
+                    <option value="Gate A - Main Entrance">Gate A - Main Entrance</option>
+                    <option value="Gate B - North Service">Gate B - North Service</option>
+                    <option value="Gate C - West Emergency">Gate C - West Emergency</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+              <button type="submit" class="btn btn-primary">Save Guard</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+    lucide.createIcons();
+
+    document.getElementById('add-guard-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = document.getElementById('ag-name').value;
+      const phone = document.getElementById('ag-phone').value;
+      const shift = document.getElementById('ag-shift').value;
+      const gate = document.getElementById('ag-gate').value;
+
+      state.guards.push({ id: Date.now(), name, phone, shift, gate });
+      closeModal();
+      showToast(`Guard ${name} added to roster!`, 'success');
+      render();
+    });
+  };
+
+  window.openVisitorDetailModal = function (id) {
+    const item = state.visitorRequests.find(r => r.id === id);
+    if (!item) return;
+    const container = document.getElementById('modal-container');
+    container.innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h3 style="font-family:var(--font-heading); font-size:16px; font-weight:700;">Visitor Audit Record</h3>
+            <i data-lucide="x" style="cursor:pointer;" onclick="closeModal()"></i>
+          </div>
+          <div class="modal-body" style="text-align:center;">
+            <img src="${item.photoUrl}" style="width:100px; height:100px; border-radius:var(--radius-md); object-fit:cover; margin-bottom:12px; border:2px solid var(--primary-blue);">
+            <h3 style="font-size:20px; font-weight:700;">${item.visitorName}</h3>
+            <p style="font-size:13px; color:var(--text-muted);">Phone: ${item.visitorPhone}</p>
+            <div style="background:#f8fafc; padding:12px; border-radius:8px; margin-top:16px; text-align:left; font-size:13px;">
+              <div><strong>Destination:</strong> Block ${item.targetBlock || 'A'} - Flat ${item.targetFlat}</div>
+              <div><strong>Purpose:</strong> ${item.purpose}</div>
+              <div><strong>In Time:</strong> ${item.inTime || 'Logged today'}</div>
+              <div><strong>Status:</strong> <span class="status-pill active">${item.status}</span></div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+          </div>
+        </div>
+      </div>
+    `;
+    lucide.createIcons();
   };
 
   window.closeModal = function () {
