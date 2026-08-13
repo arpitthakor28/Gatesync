@@ -3,6 +3,17 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+### Environment & Secret Files (Never push to Git)
+.env
+.env.*
+*.env
+*.env.local
+*.env.development.local
+*.env.test.local
+*.env.production.local
+application-local.yml
+application-local.properties
+
 ### IDE files
 .idea/
 *.iws
