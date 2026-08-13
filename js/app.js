@@ -242,21 +242,13 @@
                 ${state.isAuthenticating ? `<span class="spinner-loader"></span> Authenticating...` : `<i data-lucide="shield"></i> Authenticate & Login`}
               </button>
             </form>
-
-            <div class="demo-pills">
-              <span style="font-size:11px; font-weight:700; color:var(--text-muted); width:100%;">Instant Demo Role Logins:</span>
-              <div class="demo-pill" onclick="quickLogin('admin', 'admin123')">🔑 Admin (Rajesh)</div>
-              <div class="demo-pill" onclick="quickLogin('guard', 'guard123')">👮 Guard (Vikram)</div>
-              <div class="demo-pill" onclick="quickLogin('resident', 'resident123')">🏡 Resident (Amit, Flat A-402)</div>
-              <div class="demo-pill" onclick="quickLogin('resident2', 'password123')">🔒 Forced Reset Demo (Sunita)</div>
-            </div>
           </div>
         </div>
       </div>
     `;
   }
 
-  // 2. Global Dashboard Layout Wrapper (Light Sidebar - Exact Mockup Match)
+  // 2. Global Dashboard Layout Wrapper
   function renderDashboardLayout() {
     const user = state.currentUser || { fullName: 'Rajesh Sharma', role: 'ADMIN' };
     const role = user.role;
@@ -332,7 +324,7 @@
 
     return `
       <div class="dashboard-layout">
-        <!-- Desktop Light Sidebar (Exact Match to Mockup) -->
+        <!-- Desktop Light Sidebar -->
         <aside class="sidebar" id="app-sidebar">
           <div class="sidebar-brand">
             <div class="brand-icon"><i data-lucide="shield"></i></div>
@@ -369,9 +361,9 @@
             </div>
 
             <div class="header-actions">
-              <div class="role-switcher-pill ${role}" onclick="cycleRoleDemo()">
+              <div class="active-page-badge ${role}">
                 <i data-lucide="${role === 'ADMIN' ? 'shield' : role === 'GUARD' ? 'shield-check' : 'home'}" style="width:14px; height:14px;"></i>
-                <span>${role === 'GUARD' ? 'GATE 1 - GUARD' : role === 'RESIDENT' ? 'RESIDENT' : 'ADMIN'} (Switch Role)</span>
+                <span>${role === 'GUARD' ? 'GUARD TERMINAL' : role === 'RESIDENT' ? 'RESIDENT PORTAL' : 'ADMIN DASHBOARD'}</span>
               </div>
 
               <div class="notification-bell" onclick="toggleNotificationDrawer()">
@@ -416,20 +408,22 @@
 
         <!-- Mobile Bottom Navigation -->
         <nav class="mobile-bottom-nav">
-          <div class="mobile-nav-btn ${role === 'ADMIN' ? 'active' : ''}" onclick="quickLogin('admin', 'admin123')">
-            <i data-lucide="shield"></i> Admin
+          <div class="mobile-nav-btn active" onclick="switchTab('dashboard')">
+            <i data-lucide="${role === 'ADMIN' ? 'layout-dashboard' : role === 'GUARD' ? 'user-plus' : 'radio'}"></i> Dashboard
           </div>
-          <div class="mobile-nav-btn ${role === 'GUARD' ? 'active' : ''}" onclick="quickLogin('guard', 'guard123')">
-            <i data-lucide="shield-check"></i> Guard
+          <div class="mobile-nav-btn" onclick="switchTab('logs')">
+            <i data-lucide="file-text"></i> Logs
           </div>
-          <div class="mobile-fab-center" onclick="openRegisterVisitorModal()">
-            <i data-lucide="plus" style="width:24px; height:24px;"></i>
-          </div>
-          <div class="mobile-nav-btn ${role === 'RESIDENT' ? 'active' : ''}" onclick="quickLogin('resident', 'resident123')">
-            <i data-lucide="home"></i> Resident
-          </div>
+          ${role === 'GUARD' ? `
+            <div class="mobile-fab-center" onclick="openRegisterVisitorModal()">
+              <i data-lucide="plus" style="width:24px; height:24px;"></i>
+            </div>
+          ` : ''}
           <div class="mobile-nav-btn" onclick="openProfileModal()">
             <i data-lucide="user"></i> Profile
+          </div>
+          <div class="mobile-nav-btn" onclick="clearSession()">
+            <i data-lucide="log-out"></i> Logout
           </div>
         </nav>
       </div>
@@ -661,7 +655,7 @@
                 </div>
                 <div class="form-group">
                   <label>Phone Number</label>
-                  <input type="tel" id="vis-phone" class="form-control" placeholder="+91 98765 43210" required>
+                  <input type="tel" id="vis-phone" class="form-control" placeholder="e.g. 9876543210" required>
                 </div>
               </div>
 
@@ -786,11 +780,26 @@
 
   // 5. Resident View (Exact Match to Mockup 3 & 4)
   function renderResidentView() {
-    const pendingRequests = state.visitorRequests.filter(r => r.status === 'PENDING');
+    const user = state.currentUser;
+    const userFlat = user && user.flatNumber ? String(user.flatNumber).trim() : '';
+    const userBlock = user && user.blockNumber ? String(user.blockNumber).trim() : '';
+
+    const myVisitorRequests = state.visitorRequests.filter(r => {
+      if (!userFlat) return false;
+      const targetFlatStr = String(r.targetFlat || '').trim();
+      const targetBlockStr = String(r.targetBlock || '').trim();
+      const matchFlat = targetFlatStr === userFlat || targetFlatStr.endsWith(userFlat);
+      const matchBlock = !userBlock || !targetBlockStr || targetBlockStr === userBlock;
+      return matchFlat && matchBlock;
+    });
+
+    const pendingRequests = myVisitorRequests.filter(r => r.status === 'PENDING');
     const activeReq = pendingRequests.length > 0 ? pendingRequests[0] : null;
+    const visitorCount = myVisitorRequests.length;
+    const formattedCount = visitorCount < 10 ? '0' + visitorCount : String(visitorCount);
 
     return `
-      <!-- LIVE REQUEST Hero Card (Exact Match to Mockup 3) -->
+      <!-- LIVE REQUEST Hero Card -->
       ${activeReq ? `
         <div class="live-request-card">
           <div class="live-badge-head">
@@ -805,7 +814,7 @@
               <div class="live-visitor-company">${activeReq.purpose} • Phone: ${activeReq.visitorPhone}</div>
 
               <div class="purpose-quote-box">
-                "${activeReq.purposeQuote || 'Package delivery for Unit 402. Requires signature.'}"
+                "${activeReq.purposeQuote || 'Visitor request for Unit ' + (userFlat || '402') + '. Requires entry confirmation.'}"
               </div>
 
               <div class="live-action-btns">
@@ -823,7 +832,7 @@
         <div class="card-box" style="margin-bottom:24px; text-align:center; padding:24px;">
           <div style="font-size:24px; margin-bottom:6px;">🏡</div>
           <h3 style="font-family:var(--font-heading); font-size:18px; font-weight:700;">No Active Gate Visitor Alerts</h3>
-          <p style="font-size:13px; color:var(--text-muted);">Incoming gate visitor requests will appear here in real time.</p>
+          <p style="font-size:13px; color:var(--text-muted);">Incoming gate visitor requests for Flat ${userFlat || ''} will appear here in real time.</p>
         </div>
       `}
 
@@ -834,7 +843,7 @@
               <div class="stat-info-left">
                 <h4>VISITORS TODAY</h4>
                 <div style="display:flex; align-items:center; gap:8px;">
-                  <span class="stat-val-num">${state.visitorRequests.length < 10 ? '0' + state.visitorRequests.length : state.visitorRequests.length}</span>
+                  <span class="stat-val-num">${formattedCount}</span>
                   <span class="stat-badge-tag blue">Live</span>
                 </div>
               </div>
@@ -855,7 +864,7 @@
             <div class="stat-card-clean">
               <div class="stat-info-left">
                 <h4>GUEST PARKING</h4>
-                <span class="stat-val-num">P-12</span>
+                <span class="stat-val-num">${visitorCount > 0 ? 'P-12' : '00'}</span>
               </div>
               <div class="stat-icon-circle gray"><i data-lucide="square-p"></i></div>
             </div>
@@ -888,13 +897,13 @@
                   </tr>
                 </thead>
                 <tbody>
-                  ${state.visitorRequests.length === 0 ? `
+                  ${myVisitorRequests.length === 0 ? `
                     <tr>
                       <td colspan="6" style="text-align:center; color:var(--text-muted); padding:24px;">
                         No previous visitor history logged yet. (0 Visitors)
                       </td>
                     </tr>
-                  ` : state.visitorRequests.map(item => `
+                  ` : myVisitorRequests.map(item => `
                     <tr>
                       <td>
                         <div style="display:flex; align-items:center; gap:10px;">
@@ -1597,12 +1606,12 @@
             </div>
             <div class="form-group" style="text-align:left;">
               <label>Guest Phone (+91)</label>
-              <input type="tel" class="form-control" placeholder="+91 98765 43210" value="+91 98765 43210">
+              <input type="tel" id="pass-guest-phone" class="form-control" placeholder="Enter guest phone number">
             </div>
           </div>
           <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeModal()">Close</button>
-            <button class="btn btn-primary" onclick="closeModal(); showToast('Pass code ${passCode} copied & sent via SMS to +91 guest!', 'success')">
+            <button class="btn btn-primary" onclick="sharePassCode('${passCode}')">
               <i data-lucide="share-2"></i> Share Pass Code
             </button>
           </div>
@@ -1610,6 +1619,17 @@
       </div>
     `;
     lucide.createIcons();
+  };
+
+  window.sharePassCode = function (passCode) {
+    const phoneInput = document.getElementById('pass-guest-phone');
+    const phone = phoneInput ? phoneInput.value.trim() : '';
+    closeModal();
+    if (phone) {
+      showToast(`Pass code ${passCode} copied & sent via SMS to ${phone}!`, 'success');
+    } else {
+      showToast(`Pass code ${passCode} copied to clipboard!`, 'success');
+    }
   };
 
   window.openAddUserModal = function (type = 'RESIDENT') {
@@ -1646,7 +1666,7 @@
               </div>
               <div class="form-group" style="margin-bottom:12px;">
                 <label>Contact Phone (+91)</label>
-                <input type="tel" id="au-phone" class="form-control" placeholder="+91 98765 43210" required>
+                <input type="tel" id="au-phone" class="form-control" placeholder="e.g. 9876543210" required>
               </div>
               <div class="form-grid">
                 <div class="form-group">
