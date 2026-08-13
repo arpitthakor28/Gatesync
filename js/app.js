@@ -32,18 +32,11 @@
     // Visitor Requests State (Reset to Zero)
     visitorRequests: [],
 
-    // Resident Directory (Indian +91 Format)
-    residents: [
-      { id: 1, name: 'Suresh Verma', initials: 'SV', flat: 'A-102', loginId: 'res_a102', phone: '+91 97654 32109', backupPhone: '+91 97000 11223', status: 'Active', avatarBg: 'blue' },
-      { id: 2, name: 'Priya Sharma', initials: 'PS', flat: 'B-405', loginId: 'res_b405', phone: '+91 96543 21098', backupPhone: '+91 96000 33445', status: 'Active', avatarBg: 'teal' },
-      { id: 3, name: 'Rohan Mehta', initials: 'RM', flat: 'C-201', loginId: 'res_c201', phone: '+91 94321 09876', backupPhone: '+91 94000 55667', status: 'Inactive', avatarBg: 'gray' },
-      { id: 4, name: 'Amit Patel', initials: 'AP', flat: 'A-402', loginId: 'resident', phone: '+91 99887 76655', backupPhone: '+91 99000 77889', status: 'Active', avatarBg: 'purple' }
-    ],
+    // Resident Directory (Reset to Zero)
+    residents: [],
 
-    guards: [
-      { id: 10, name: 'Vikram Singh', phone: '+91 98123 45678', shift: 'DAY', gate: 'Gate A - Main Entrance' },
-      { id: 11, name: 'Ramesh Kumar', phone: '+91 98987 65432', shift: 'NIGHT', gate: 'Gate B - North Service' }
-    ]
+    // Security Guards (Reset to Zero)
+    guards: []
   };
 
   const PRESET_PHOTOS = [
@@ -697,8 +690,8 @@
                   <input type="text" id="vis-name" class="form-control" placeholder="Full Name" required>
                 </div>
                 <div class="form-group">
-                  <label>Phone Number</label>
-                  <input type="tel" id="vis-phone" class="form-control" placeholder="e.g. 9876543210" required>
+                  <label>Phone Number (10 Digits)</label>
+                  <input type="tel" id="vis-phone" class="form-control" placeholder="e.g. 9876543210" maxlength="10" pattern="[0-9]{10}" oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,10)" required>
                 </div>
               </div>
 
@@ -1510,18 +1503,237 @@
     lucide.createIcons();
   };
 
-  window.submitProblemReport = function () {
-    const title = document.getElementById('pr-title').value || 'Community Issue';
-    closeModal();
-    showToast(`Problem "${title}" submitted to Community Feed & Admin!`, 'success');
+  // WebRTC Visitor Identity Camera Capture Engine
+  window.openCameraModal = function () {
+    const container = document.getElementById('camera-modal-container');
+    container.innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-card" style="max-width:500px; text-align:center;">
+          <div class="modal-header">
+            <h3 style="font-family:var(--font-heading); font-size:16px; font-weight:700;"><i data-lucide="camera"></i> Visitor Camera Capture</h3>
+            <i data-lucide="x" style="cursor:pointer;" onclick="closeCameraModal()"></i>
+          </div>
+          <div class="modal-body">
+            <div style="position:relative; width:100%; height:260px; background:#000; border-radius:12px; overflow:hidden; display:flex; align-items:center; justify-content:center; margin-bottom:16px;">
+              <video id="camera-video" autoplay playsinline style="width:100%; height:100%; object-fit:cover; display:none;"></video>
+              <canvas id="camera-canvas" style="display:none;"></canvas>
+              <div id="camera-placeholder" style="color:#94a3b8; font-size:13px; text-align:center; padding:20px;">
+                <i data-lucide="camera-off" style="width:36px; height:36px; margin-bottom:8px; display:block; margin:0 auto 8px;"></i>
+                <div style="font-weight:600;">Requesting Camera Access...</div>
+              </div>
+            </div>
+
+            <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px; text-align:left; font-weight:600;">Or Choose Sample Visitor Photo:</div>
+            <div style="display:flex; gap:10px; overflow-x:auto; padding-bottom:8px;">
+              ${PRESET_PHOTOS.map((p) => `
+                <img src="${p.url}" title="${p.title}" onclick="selectPresetPhoto('${p.url}')" style="width:60px; height:60px; border-radius:8px; object-fit:cover; cursor:pointer; border:2px solid ${state.selectedPhoto === p.url ? '#2563eb' : 'transparent'}; flex-shrink:0;">
+              `).join('')}
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeCameraModal()">Cancel</button>
+            <button type="button" id="snap-btn" class="btn btn-primary" onclick="captureCameraPhoto()"><i data-lucide="camera"></i> Take Snap</button>
+          </div>
+        </div>
+      </div>
+    `;
+    lucide.createIcons();
+
+    const video = document.getElementById('camera-video');
+    const placeholder = document.getElementById('camera-placeholder');
+
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+        .then(stream => {
+          state.cameraStream = stream;
+          if (video) {
+            video.srcObject = stream;
+            video.style.display = 'block';
+            if (placeholder) placeholder.style.display = 'none';
+          }
+        })
+        .catch(err => {
+          console.warn('Camera access error:', err);
+          if (placeholder) {
+            placeholder.innerHTML = `
+              <i data-lucide="camera-off" style="width:36px; height:36px; margin:0 auto 8px; display:block; color:#ef4444;"></i>
+              <div style="color:#ef4444; font-weight:600;">Camera Permission Denied or Not Supported</div>
+              <div style="font-size:11px; margin-top:4px; color:var(--text-muted);">Please select one of the sample photos below.</div>
+            `;
+            lucide.createIcons();
+          }
+        });
+    }
   };
 
-  window.openClubhouseApprovalAdminModal = function () {
-    showToast('Clubhouse Booking Approval Panel (1 Pending Request)', 'info');
+  window.closeCameraModal = function () {
+    if (state.cameraStream) {
+      state.cameraStream.getTracks().forEach(track => track.stop());
+      state.cameraStream = null;
+    }
+    const container = document.getElementById('camera-modal-container');
+    if (container) container.innerHTML = '';
+  };
+
+  window.captureCameraPhoto = function () {
+    const video = document.getElementById('camera-video');
+    const canvas = document.getElementById('camera-canvas');
+    if (video && video.style.display !== 'none' && video.videoWidth) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      state.selectedPhoto = canvas.toDataURL('image/jpeg');
+      showToast('Visitor photo captured successfully!', 'success');
+    }
+    closeCameraModal();
+    render();
+  };
+
+  window.selectPresetPhoto = function (url) {
+    state.selectedPhoto = url;
+    showToast('Sample visitor photo selected', 'info');
+    closeCameraModal();
+    render();
+  };
+
+  // Community Issues & Broadcast Management
+  window.submitProblemReport = function () {
+    const titleInput = document.getElementById('pr-title');
+    const title = titleInput ? titleInput.value.trim() : '';
+
+    if (!title) {
+      showToast('Please enter a problem title!', 'error');
+      return;
+    }
+
+    const categorySelect = document.getElementById('pr-category');
+    const category = categorySelect ? categorySelect.value : 'General';
+    const descInput = document.getElementById('pr-desc');
+    const description = descInput ? descInput.value.trim() : '';
+
+    const user = state.currentUser || { fullName: 'Resident', flatNumber: '402', blockNumber: 'A' };
+    const flatStr = user.flatNumber ? `Flat ${user.blockNumber || 'A'}-${user.flatNumber}` : 'Flat A-402';
+
+    const problem = {
+      id: Date.now(),
+      reporterName: user.fullName || 'Resident',
+      flat: flatStr,
+      title: title,
+      category: category,
+      priority: 'Medium',
+      description: description,
+      status: 'PENDING',
+      createdAt: 'Just now'
+    };
+
+    state.communityProblems.unshift(problem);
+    closeModal();
+    showToast(`Problem "${title}" submitted to Community Feed & Admin!`, 'success');
+    render();
+  };
+
+  window.openCommunityFeedModal = function () {
+    const container = document.getElementById('modal-container');
+    container.innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-card" style="max-width:650px;">
+          <div class="modal-header">
+            <h3 style="font-family:var(--font-heading); font-size:16px; font-weight:700; color:var(--primary-blue);">
+              <i data-lucide="message-square"></i> Community Feed & Reported Issues
+            </h3>
+            <i data-lucide="x" style="cursor:pointer;" onclick="closeModal()"></i>
+          </div>
+          <div class="modal-body" style="max-height:400px; overflow-y:auto;">
+            ${state.communityProblems.length === 0 ? `
+              <div style="text-align:center; padding:30px; color:var(--text-muted);">
+                <i data-lucide="check-circle-2" style="width:40px; height:40px; margin:0 auto 8px; display:block; color:#10b981;"></i>
+                <div style="font-weight:600;">No community issues reported</div>
+                <div style="font-size:12px; margin-top:2px;">All society operations are running smoothly.</div>
+              </div>
+            ` : state.communityProblems.map(p => `
+              <div style="padding:14px; border:1px solid #e2e8f0; border-radius:10px; margin-bottom:10px; background:#f8fafc;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                  <span style="font-weight:700; font-size:14px; color:#1e293b;">${p.title}</span>
+                  <span class="status-pill ${p.status === 'RESOLVED' ? 'active' : 'checked-out'}">${p.status}</span>
+                </div>
+                <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">
+                  Reported by <strong>${p.reporterName} (${p.flat})</strong> • Category: ${p.category}
+                </div>
+                <div style="font-size:13px; color:#334155;">${p.description || 'No detailed description.'}</div>
+                ${p.adminReply ? `
+                  <div style="margin-top:8px; padding:8px 12px; background:#eff6ff; border-left:3px solid #2563eb; border-radius:4px; font-size:12px; color:#1e40af;">
+                    <strong>Admin Reply:</strong> ${p.adminReply}
+                  </div>
+                ` : ''}
+              </div>
+            `).join('')}
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+            <button class="btn btn-primary" onclick="closeModal(); openReportProblemModal();"><i data-lucide="plus"></i> Report Issue</button>
+          </div>
+        </div>
+      </div>
+    `;
+    lucide.createIcons();
   };
 
   window.openCommunityProblemsAdminModal = function () {
-    showToast('Community Complaints Panel (1 Issue under review)', 'info');
+    const container = document.getElementById('modal-container');
+    container.innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-card" style="max-width:700px;">
+          <div class="modal-header">
+            <h3 style="font-family:var(--font-heading); font-size:16px; font-weight:700; color:#2563eb;">
+              <i data-lucide="shield-alert"></i> Admin - Community Complaints Management
+            </h3>
+            <i data-lucide="x" style="cursor:pointer;" onclick="closeModal()"></i>
+          </div>
+          <div class="modal-body" style="max-height:420px; overflow-y:auto;">
+            ${state.communityProblems.length === 0 ? `
+              <div style="text-align:center; padding:30px; color:var(--text-muted);">
+                <div style="font-weight:600;">0 Complaints Logged</div>
+                <div style="font-size:12px; margin-top:2px;">Resident issue reports will appear here for Admin review.</div>
+              </div>
+            ` : state.communityProblems.map(p => `
+              <div style="padding:14px; border:1px solid #e2e8f0; border-radius:10px; margin-bottom:12px; background:white;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                  <span style="font-weight:700; font-size:14px;">${p.title} (${p.category})</span>
+                  <span class="status-pill ${p.status === 'RESOLVED' ? 'active' : 'checked-out'}">${p.status}</span>
+                </div>
+                <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">By ${p.reporterName} (${p.flat})</div>
+                <div style="font-size:13px; color:#334155; margin-bottom:10px;">${p.description || 'No description provided.'}</div>
+                <div style="display:flex; gap:8px;">
+                  <button class="btn btn-primary btn-sm" style="background:#16a34a;" onclick="resolveProblem(${p.id})">Mark Resolved</button>
+                  <button class="btn btn-secondary btn-sm" onclick="deleteProblem(${p.id})">Delete</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+          </div>
+        </div>
+      </div>
+    `;
+    lucide.createIcons();
+  };
+
+  window.resolveProblem = function (id) {
+    const p = state.communityProblems.find(item => item.id === id);
+    if (p) {
+      p.status = 'RESOLVED';
+      p.adminReply = 'Issue investigated and resolved by Admin team.';
+      showToast(`Complaint "${p.title}" marked as RESOLVED!`, 'success');
+      openCommunityProblemsAdminModal();
+    }
+  };
+
+  window.deleteProblem = function (id) {
+    state.communityProblems = state.communityProblems.filter(item => item.id !== id);
+    showToast('Complaint removed', 'info');
+    openCommunityProblemsAdminModal();
   };
 
   window.openRegisterVisitorModal = function () {
@@ -1676,14 +1888,12 @@
             </div>
             <div class="form-group" style="text-align:left;">
               <label>Guest Phone (+91)</label>
-              <input type="tel" id="pass-guest-phone" class="form-control" placeholder="Enter guest phone number">
+              <input type="tel" id="pass-guest-phone" class="form-control" placeholder="10-digit mobile number" maxlength="10" pattern="[0-9]{10}" oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,10)">
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn btn-secondary" onclick="closeModal()">Close</button>
-            <button class="btn btn-primary" onclick="sharePassCode('${passCode}')">
-              <i data-lucide="share-2"></i> Share Pass Code
-            </button>
+            <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="sharePassCode('${passCode}')"><i data-lucide="share-2"></i> Copy & Share Pass</button>
           </div>
         </div>
       </div>
@@ -1735,8 +1945,8 @@
                 </div>
               </div>
               <div class="form-group" style="margin-bottom:12px;">
-                <label>Contact Phone (+91)</label>
-                <input type="tel" id="au-phone" class="form-control" placeholder="e.g. 9876543210" required>
+                <label>Contact Phone (+91 - 10 Digits)</label>
+                <input type="tel" id="au-phone" class="form-control" placeholder="e.g. 9876543210" maxlength="10" pattern="[0-9]{10}" oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,10)" required>
               </div>
               <div class="form-grid">
                 <div class="form-group">
