@@ -92,6 +92,46 @@
     showToast('Logged out successfully', 'info');
   }
 
+  function normalizeResident(r) {
+    if (!r) return null;
+    const fullName = r.fullName || r.name || 'Resident';
+    const initials = r.initials || (fullName ? fullName.split(' ').filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'RS');
+    
+    let flatStr = r.flat;
+    if (!flatStr) {
+      if (r.blockNumber && r.flatNumber) {
+        flatStr = `${r.blockNumber}-${r.flatNumber}`;
+      } else if (r.flatNumber) {
+        flatStr = r.flatNumber;
+      } else if (r.blockNumber) {
+        flatStr = r.blockNumber;
+      } else {
+        flatStr = 'A-101';
+      }
+    }
+    
+    let statusStr = r.status;
+    if (!statusStr) {
+      statusStr = (r.active !== false) ? 'Active' : 'Inactive';
+    }
+
+    return {
+      id: r.id || Date.now(),
+      name: fullName,
+      fullName: fullName,
+      initials: initials,
+      flat: flatStr,
+      blockNumber: r.blockNumber || (flatStr.includes('-') ? flatStr.split('-')[0] : 'A'),
+      flatNumber: r.flatNumber || (flatStr.includes('-') ? flatStr.split('-')[1] : flatStr),
+      loginId: r.loginId || '',
+      phone: r.phone || '',
+      backupPhone: r.backupPhone || '',
+      status: statusStr,
+      active: statusStr === 'Active',
+      avatarBg: r.avatarBg || 'blue'
+    };
+  }
+
   async function fetchInitialData() {
     try {
       const [resReq, resGuards, resResidents] = await Promise.all([
@@ -100,9 +140,12 @@
         fetch('/api/admin/residents').then(r => r.ok ? r.json() : null)
       ]);
 
-      if (resReq && resReq.length) state.visitorRequests = resReq;
-      if (resGuards && resGuards.length) state.guards = resGuards;
-      if (resResidents && resResidents.length) state.residents = resResidents;
+      if (resReq && Array.isArray(resReq) && resReq.length) state.visitorRequests = resReq;
+      if (resGuards && Array.isArray(resGuards) && resGuards.length) state.guards = resGuards;
+      if (resResidents && Array.isArray(resResidents) && resResidents.length) {
+        state.residents = resResidents.map(normalizeResident).filter(Boolean);
+      }
+      render();
     } catch (e) {
       console.warn('API backend connecting, using local UI state fallback.');
     }
@@ -361,9 +404,9 @@
             </div>
 
             <div class="header-actions">
-              <div class="active-page-badge ${role}">
+              <div class="active-page-badge ${role}" onclick="openSwitchRoleModal()" style="cursor:pointer;" title="Click to Switch Portal/Account">
                 <i data-lucide="${role === 'ADMIN' ? 'shield' : role === 'GUARD' ? 'shield-check' : 'home'}" style="width:14px; height:14px;"></i>
-                <span>${role === 'GUARD' ? 'GUARD TERMINAL' : role === 'RESIDENT' ? 'RESIDENT PORTAL' : 'ADMIN DASHBOARD'}</span>
+                <span>${role === 'GUARD' ? 'GUARD TERMINAL' : role === 'RESIDENT' ? 'RESIDENT PORTAL' : 'ADMIN DASHBOARD'} ▾</span>
               </div>
 
               <div class="notification-bell" onclick="toggleNotificationDrawer()">
@@ -1229,18 +1272,45 @@
   }
 
   // Helper Actions & Modals
-  window.quickLogin = function (loginId, password) {
-    let mockUser = { id: 1, loginId, fullName: 'Rajesh Sharma', role: 'ADMIN', mustResetPassword: false };
-    if (loginId === 'guard') {
-      mockUser = { id: 2, loginId, fullName: 'Vikram Singh', role: 'GUARD', mustResetPassword: false };
-    } else if (loginId === 'resident') {
-      mockUser = { id: 3, loginId, fullName: 'Amit Patel', role: 'RESIDENT', blockNumber: 'A', flatNumber: '402', mustResetPassword: false };
-    } else if (loginId === 'resident2') {
-      mockUser = { id: 4, loginId, fullName: 'Sunita Rao', role: 'RESIDENT', blockNumber: 'B', flatNumber: '105', mustResetPassword: true };
+  window.openSwitchRoleModal = function () {
+    const container = document.getElementById('modal-container');
+    container.innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-card" style="max-width:380px;">
+          <div class="modal-header">
+            <h3 style="font-family:var(--font-heading); font-size:16px; font-weight:700;">Switch Active Portal</h3>
+            <i data-lucide="x" style="cursor:pointer;" onclick="closeModal()"></i>
+          </div>
+          <div class="modal-body" style="display:flex; flex-direction:column; gap:10px;">
+            <button class="btn btn-primary" onclick="closeModal(); switchPortal('ADMIN')" style="justify-content:flex-start; padding:12px 16px; width:100%;">
+              <i data-lucide="shield"></i> Admin Dashboard
+            </button>
+            <button class="btn btn-primary" onclick="closeModal(); switchPortal('GUARD')" style="background:#0284c7; justify-content:flex-start; padding:12px 16px; width:100%;">
+              <i data-lucide="shield-check"></i> Guard Terminal
+            </button>
+            <button class="btn btn-primary" onclick="closeModal(); switchPortal('RESIDENT')" style="background:#0d9488; justify-content:flex-start; padding:12px 16px; width:100%;">
+              <i data-lucide="home"></i> Resident Portal
+            </button>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          </div>
+        </div>
+      </div>
+    `;
+    lucide.createIcons();
+  };
+
+  window.switchPortal = function (role) {
+    let mockUser = { id: 1, loginId: 'admin', fullName: 'Rajesh Sharma', role: 'ADMIN', mustResetPassword: false };
+    if (role === 'GUARD') {
+      mockUser = { id: 2, loginId: 'guard', fullName: 'Vikram Singh', role: 'GUARD', mustResetPassword: false };
+    } else if (role === 'RESIDENT') {
+      mockUser = { id: 3, loginId: 'resident', fullName: 'Amit Patel', role: 'RESIDENT', blockNumber: 'A', flatNumber: '402', mustResetPassword: false };
     }
-    saveSession(mockUser, 'mock_token_' + Date.now());
-    state.activeView = mockUser.mustResetPassword ? 'password_reset' : mockUser.role.toLowerCase();
-    showToast(`Logged in as ${mockUser.fullName}`, 'success');
+    saveSession(mockUser, 'token_' + Date.now());
+    state.activeView = role.toLowerCase();
+    showToast(`Switched to ${role === 'GUARD' ? 'Guard Terminal' : role === 'RESIDENT' ? 'Resident Portal' : 'Admin Dashboard'}`, 'success');
     render();
   };
 
