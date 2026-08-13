@@ -4,6 +4,8 @@ server:
 spring:
   application:
     name: gatesync-app
+  main:
+    allow-bean-definition-overriding: true
   data:
     mongodb:
       uri: ${MONGODB_URI:mongodb+srv://thakorarpitsinh:Gatesync@cluster0.xudh85e.mongodb.net/gatesync?retryWrites=true&w=majority}

@@ -20,7 +20,14 @@ try {
 
         $fullPath = Join-Path $staticDir ($path.Replace('/', '\').TrimStart('\'))
 
-        if (Test-Path $fullPath -PathType Leaf) {
+        if ($path -eq "/api/health") {
+            $json = '{"status":"OK","message":"Your API is running","timestamp":"' + (Get-Date -Format "o") + '"}'
+            $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+            $res.ContentType = "application/json; charset=utf-8"
+            $res.ContentLength64 = $bytes.Length
+            $res.StatusCode = 200
+            $res.OutputStream.Write($bytes, 0, $bytes.Length)
+        } elseif (Test-Path $fullPath -PathType Leaf) {
             $bytes = [System.IO.File]::ReadAllBytes($fullPath)
             if ($fullPath.EndsWith(".html")) { $res.ContentType = "text/html; charset=utf-8" }
             elseif ($fullPath.EndsWith(".css")) { $res.ContentType = "text/css" }

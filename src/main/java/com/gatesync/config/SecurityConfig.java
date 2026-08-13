@@ -23,7 +23,7 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin())) // For H2 Console
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/", "/index.html", "/css/**", "/js/**", "/assets/**", "/h2-console/**", "/ws-gatesync/**", "/api/auth/**").permitAll()
+                .requestMatchers("/", "/index.html", "/css/**", "/js/**", "/assets/**", "/h2-console/**", "/ws-gatesync/**", "/api/auth/**", "/api/health").permitAll()
                 .requestMatchers("/api/admin/**").permitAll()
                 .requestMatchers("/api/guard/**").permitAll()
                 .requestMatchers("/api/resident/**").permitAll()

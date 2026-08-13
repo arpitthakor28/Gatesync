@@ -2,7 +2,7 @@ package com.gatesync.service;
 
 import com.gatesync.dto.AdminDtos.*;
 import com.gatesync.model.*;
-import com.gatesync.repository.*;
+import com.gatesync.repository.jpa.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;

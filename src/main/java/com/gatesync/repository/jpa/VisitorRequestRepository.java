@@ -1,4 +1,4 @@
-package com.gatesync.repository;
+package com.gatesync.repository.jpa;
 
 import com.gatesync.model.VisitorRequest;
 import com.gatesync.model.VisitorStatus;

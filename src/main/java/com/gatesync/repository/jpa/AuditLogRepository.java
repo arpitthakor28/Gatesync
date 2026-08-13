@@ -1,4 +1,4 @@
-package com.gatesync.repository;
+package com.gatesync.repository.jpa;
 
 import com.gatesync.model.AuditLog;
 import org.springframework.data.jpa.repository.JpaRepository;

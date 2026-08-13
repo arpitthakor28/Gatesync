@@ -2,7 +2,7 @@ package com.gatesync.service;
 
 import com.gatesync.dto.VisitorDtos.*;
 import com.gatesync.model.*;
-import com.gatesync.repository.*;
+import com.gatesync.repository.jpa.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
