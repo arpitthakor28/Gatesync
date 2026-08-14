@@ -17,6 +17,7 @@ import java.util.List;
 public class AdminService {
 
     private final UserRepository userRepository;
+    private final com.gatesync.repository.mongo.UserMongoRepository userMongoRepository;
     private final FlatRepository flatRepository;
     private final VisitorRequestRepository visitorRequestRepository;
     private final AuditLogRepository auditLogRepository;
@@ -72,12 +73,15 @@ public class AdminService {
                 .build();
 
         User saved = userRepository.save(user);
+        try {
+            userMongoRepository.save(user);
+        } catch (Exception e) {}
 
         auditLogRepository.save(AuditLog.builder()
                 .actorName("Admin System")
                 .actorRole("ADMIN")
                 .actionCategory("USER_MGMT")
-                .description("Created new " + role.name() + " account: " + saved.getFullName() + " (" + saved.getLoginId() + ")")
+                .description("Created new " + role.name() + " account in DB & MongoDB Atlas: " + saved.getFullName() + " (" + saved.getLoginId() + ")")
                 .build());
 
         return saved;

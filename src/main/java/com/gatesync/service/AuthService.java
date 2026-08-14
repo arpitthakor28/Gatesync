@@ -19,11 +19,13 @@ import com.gatesync.model.Role;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final com.gatesync.repository.mongo.UserMongoRepository userMongoRepository;
     private final AuditLogRepository auditLogRepository;
     private final PasswordEncoder passwordEncoder;
 
     public LoginResponse authenticate(LoginRequest req) {
         User user = userRepository.findByLoginId(req.getLoginId())
+                .or(() -> userMongoRepository.findByLoginId(req.getLoginId()))
                 .orElseThrow(() -> new RuntimeException("Invalid credentials"));
 
         if (!passwordEncoder.matches(req.getPassword(), user.getPassword())) {
@@ -53,7 +55,7 @@ public class AuthService {
 
     @Transactional
     public LoginResponse registerAdmin(RegisterAdminRequest req) {
-        if (userRepository.findByLoginId(req.getLoginId()).isPresent()) {
+        if (userRepository.findByLoginId(req.getLoginId()).isPresent() || userMongoRepository.findByLoginId(req.getLoginId()).isPresent()) {
             throw new RuntimeException("Login ID already registered!");
         }
 
@@ -68,6 +70,10 @@ public class AuthService {
                 .build();
 
         User saved = userRepository.save(admin);
+        try {
+            userMongoRepository.save(admin);
+        } catch (Exception e) {}
+
         String mockToken = "jwt_" + UUID.randomUUID().toString();
 
         auditLogRepository.save(AuditLog.builder()
