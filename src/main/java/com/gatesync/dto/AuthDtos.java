@@ -19,6 +19,18 @@ public class AuthDtos {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
+    public static class RegisterAdminRequest {
+        private String loginId;
+        private String password;
+        private String fullName;
+        private String email;
+        private String phone;
+        private String societyName;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
     @Builder
     public static class LoginResponse {
         private String token;

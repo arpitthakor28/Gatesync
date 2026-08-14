@@ -10,6 +10,9 @@
     token: null,
     activeView: 'landing', // landing, admin, guard, resident, password_reset
     adminTab: 'dashboard', // dashboard, logs, directory, guards, alerts, settings
+    // Auth Form Tabs
+    authRole: 'RESIDENT',
+    authMode: 'LOGIN',
     searchQuery: '',
     residentStatusFilter: 'ALL',
     guardShiftFilter: 'ALL',
@@ -55,16 +58,12 @@
   });
 
   function loadSavedSession() {
+    state.activeView = 'landing'; // Always start on Login form on project open
     const savedUser = localStorage.getItem('gatesync_user');
     const savedToken = localStorage.getItem('gatesync_token');
     if (savedUser && savedToken) {
       state.currentUser = JSON.parse(savedUser);
       state.token = savedToken;
-      if (state.currentUser.mustResetPassword) {
-        state.activeView = 'password_reset';
-      } else {
-        state.activeView = state.currentUser.role.toLowerCase();
-      }
     }
   }
 
@@ -212,6 +211,9 @@
 
   // 1. Landing & Login Page
   function renderLandingPage() {
+    const role = state.authRole || 'RESIDENT';
+    const mode = state.authMode || 'LOGIN';
+
     return `
       <div class="landing-hero">
         <nav class="landing-nav">
@@ -224,7 +226,7 @@
           </div>
           <div style="display:flex; gap:12px;">
             <button class="btn btn-secondary" onclick="openHelpModal()"><i data-lucide="help-circle"></i> Need Help?</button>
-            <a href="#login-section" class="btn btn-primary" onclick="document.getElementById('login-id').focus()"><i data-lucide="log-in"></i> Access Portal</a>
+            <a href="#login-section" class="btn btn-primary"><i data-lucide="log-in"></i> Access Portal</a>
           </div>
         </nav>
 
@@ -255,29 +257,97 @@
             </div>
           </div>
 
-          <div class="login-card" id="login-section">
-            <h2 style="font-family:var(--font-heading); font-size:24px; font-weight:700; margin-bottom:6px;">Sign In to GateSync</h2>
-            <p style="font-size:13px; color:var(--text-muted); margin-bottom:24px;">Select your role or enter system credentials to begin.</p>
-            
-            <form id="login-form">
-              <div class="form-group" style="margin-bottom:16px;">
-                <label>Login ID / Username</label>
-                <input type="text" id="login-id" class="form-control" placeholder="admin, guard, or resident" required value="admin">
+          <div class="login-card" id="login-section" style="min-width:340px;">
+            <!-- Role Selection Tabs -->
+            <div style="margin-bottom:18px;">
+              <label style="font-size:12px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:8px;">Select User Portal</label>
+              <div style="display:flex; background:#f1f5f9; padding:4px; border-radius:10px;">
+                <button type="button" onclick="setAuthRole('RESIDENT')" style="flex:1; padding:8px 4px; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; background:${role === 'RESIDENT' ? '#fff' : 'transparent'}; color:${role === 'RESIDENT' ? '#2563eb' : '#64748b'}; box-shadow:${role === 'RESIDENT' ? '0 2px 4px rgba(0,0,0,0.08)' : 'none'};">
+                  <i data-lucide="home" style="width:14px; height:14px; vertical-align:-2px;"></i> Resident
+                </button>
+                <button type="button" onclick="setAuthRole('GUARD')" style="flex:1; padding:8px 4px; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; background:${role === 'GUARD' ? '#fff' : 'transparent'}; color:${role === 'GUARD' ? '#2563eb' : '#64748b'}; box-shadow:${role === 'GUARD' ? '0 2px 4px rgba(0,0,0,0.08)' : 'none'};">
+                  <i data-lucide="shield-check" style="width:14px; height:14px; vertical-align:-2px;"></i> Guard
+                </button>
+                <button type="button" onclick="setAuthRole('ADMIN')" style="flex:1; padding:8px 4px; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; background:${role === 'ADMIN' ? '#fff' : 'transparent'}; color:${role === 'ADMIN' ? '#2563eb' : '#64748b'}; box-shadow:${role === 'ADMIN' ? '0 2px 4px rgba(0,0,0,0.08)' : 'none'};">
+                  <i data-lucide="shield" style="width:14px; height:14px; vertical-align:-2px;"></i> Admin
+                </button>
               </div>
-              <div class="form-group" style="margin-bottom:20px;">
-                <label>Password</label>
-                <input type="password" id="login-password" class="form-control" placeholder="••••••••" required value="admin123">
+            </div>
+
+            ${role === 'ADMIN' ? `
+              <!-- Mode Switcher for Admin (Login vs Register) -->
+              <div style="display:flex; border-bottom:2px solid #e2e8f0; margin-bottom:20px;">
+                <button type="button" onclick="setAuthMode('LOGIN')" style="flex:1; padding:10px; border:none; border-bottom:2px solid ${mode === 'LOGIN' ? '#2563eb' : 'transparent'}; background:none; font-weight:700; font-size:14px; color:${mode === 'LOGIN' ? '#2563eb' : '#64748b'}; cursor:pointer; margin-bottom:-2px;">
+                  <i data-lucide="log-in" style="width:15px; height:15px; vertical-align:-2px;"></i> Admin Login
+                </button>
+                <button type="button" onclick="setAuthMode('REGISTER')" style="flex:1; padding:10px; border:none; border-bottom:2px solid ${mode === 'REGISTER' ? '#2563eb' : 'transparent'}; background:none; font-weight:700; font-size:14px; color:${mode === 'REGISTER' ? '#2563eb' : '#64748b'}; cursor:pointer; margin-bottom:-2px;">
+                  <i data-lucide="user-plus" style="width:15px; height:15px; vertical-align:-2px;"></i> Register Admin
+                </button>
               </div>
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; font-size:12px;">
-                <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-                  <input type="checkbox" checked> Remember me
-                </label>
-                <a href="#" onclick="openForgotPasswordModal()" style="color:var(--primary-blue); text-decoration:none; font-weight:600;">Forgot Password?</a>
+            ` : `
+              <!-- Guidance Notice for Resident & Guard (No Register option) -->
+              <div style="padding:10px 12px; background:#eff6ff; border-radius:8px; font-size:12px; color:#1e40af; margin-bottom:20px; display:flex; align-items:center; gap:8px;">
+                <i data-lucide="info" style="width:16px; height:16px; flex-shrink:0;"></i>
+                <span>${role === 'RESIDENT' ? 'Resident credentials are provided by Society Admin. Enter your ID and password below.' : 'Guard access accounts are provisioned by Admin. Enter Guard ID and password below.'}</span>
               </div>
-              <button type="submit" id="login-submit-btn" class="btn btn-primary" style="width:100%; padding:12px;">
-                ${state.isAuthenticating ? `<span class="spinner-loader"></span> Authenticating...` : `<i data-lucide="shield"></i> Authenticate & Login`}
-              </button>
-            </form>
+            `}
+
+            ${(role !== 'ADMIN' || mode === 'LOGIN') ? `
+              <form id="login-form">
+                <div class="form-group" style="margin-bottom:16px;">
+                  <label>${role === 'RESIDENT' ? 'Resident ID / Username / Phone' : role === 'GUARD' ? 'Guard ID / Username' : 'Admin Username / ID'}</label>
+                  <input type="text" id="login-id" class="form-control" placeholder="${role === 'RESIDENT' ? 'res_a101 or resident' : role === 'GUARD' ? 'guard_01 or guard' : 'admin'}" required value="${role === 'RESIDENT' ? 'resident' : role === 'GUARD' ? 'guard' : 'admin'}">
+                </div>
+                <div class="form-group" style="margin-bottom:20px;">
+                  <label>Password</label>
+                  <input type="password" id="login-password" class="form-control" placeholder="••••••••" required value="${role === 'RESIDENT' ? 'resident123' : role === 'GUARD' ? 'guard123' : 'admin123'}">
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; font-size:12px;">
+                  <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                    <input type="checkbox" checked> Remember me
+                  </label>
+                  <a href="#" onclick="openForgotPasswordModal()" style="color:var(--primary-blue); text-decoration:none; font-weight:600;">Forgot Password?</a>
+                </div>
+                <button type="submit" id="login-submit-btn" class="btn btn-primary" style="width:100%; padding:12px;">
+                  ${state.isAuthenticating ? `<span class="spinner-loader"></span> Authenticating...` : `<i data-lucide="shield"></i> Sign In as ${role}`}
+                </button>
+              </form>
+            ` : `
+              <!-- Admin Register Form (Admin Only) -->
+              <form id="admin-register-form">
+                <div class="form-group" style="margin-bottom:12px;">
+                  <label>Full Name</label>
+                  <input type="text" id="reg-admin-fullname" class="form-control" placeholder="e.g. Rajesh Sharma" required>
+                </div>
+                <div class="form-group" style="margin-bottom:12px;">
+                  <label>Society Name</label>
+                  <input type="text" id="reg-admin-society" class="form-control" placeholder="e.g. Royal Palms Estate" value="Royal Palms Estate" required>
+                </div>
+                <div class="form-grid" style="margin-bottom:12px;">
+                  <div class="form-group">
+                    <label>Admin Username / ID</label>
+                    <input type="text" id="reg-admin-id" class="form-control" placeholder="e.g. admin_main" required>
+                  </div>
+                  <div class="form-group">
+                    <label>Phone Number</label>
+                    <input type="tel" id="reg-admin-phone" class="form-control" placeholder="9876543210" required>
+                  </div>
+                </div>
+                <div class="form-grid" style="margin-bottom:20px;">
+                  <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="reg-admin-password" class="form-control" placeholder="••••••••" required>
+                  </div>
+                  <div class="form-group">
+                    <label>Confirm Password</label>
+                    <input type="password" id="reg-admin-confirm" class="form-control" placeholder="••••••••" required>
+                  </div>
+                </div>
+                <button type="submit" id="reg-admin-submit-btn" class="btn btn-primary" style="width:100%; padding:12px; background:var(--accent-teal);">
+                  ${state.isAuthenticating ? `<span class="spinner-loader"></span> Creating Account...` : `<i data-lucide="user-plus"></i> Register & Create Admin Account`}
+                </button>
+              </form>
+            `}
           </div>
         </div>
       </div>
@@ -306,9 +376,6 @@
         </div>
         <div class="nav-item ${state.adminTab === 'logs' ? 'active' : ''}" onclick="switchTab('logs')">
           <i data-lucide="file-text"></i> Visitor Logs
-        </div>
-        <div class="nav-item ${state.adminTab === 'alerts' ? 'active' : ''}" onclick="switchTab('alerts')">
-          <i data-lucide="shield-alert"></i> Security Alerts
         </div>
         <div class="nav-item ${state.adminTab === 'settings' ? 'active' : ''}" onclick="switchTab('settings')">
           <i data-lucide="settings"></i> Settings
@@ -471,7 +538,6 @@
     if (state.adminTab === 'logs') return renderVisitorLogsTab();
     if (state.adminTab === 'directory') return renderResidentDirectoryTab();
     if (state.adminTab === 'guards') return renderGuardRosterTab();
-    if (state.adminTab === 'alerts') return renderSecurityAlertsTab();
     if (state.adminTab === 'settings') return renderSettingsTab();
 
     const filteredResidents = state.residents.filter(r => {
@@ -481,14 +547,14 @@
     });
 
     return `
-      <!-- Stat Cards Row (Exact Match to Mockup 1) -->
+      <!-- Stat Cards Row -->
       <div class="stats-grid-row">
         <div class="stat-card-clean">
           <div class="stat-info-left">
             <h4>Total Residents</h4>
             <div style="display:flex; align-items:center; gap:8px;">
-              <span class="stat-val-num">1,248</span>
-              <span class="stat-badge-tag blue">+12%</span>
+              <span class="stat-val-num">${state.residents.length}</span>
+              <span class="stat-badge-tag blue">${state.residents.length > 0 ? '+12%' : '0 Registered'}</span>
             </div>
           </div>
           <div class="stat-icon-circle blue"><i data-lucide="users"></i></div>
@@ -498,8 +564,8 @@
           <div class="stat-info-left">
             <h4>Active Guards</h4>
             <div style="display:flex; align-items:center; gap:8px;">
-              <span class="stat-val-num">16</span>
-              <span class="stat-badge-tag green">Stable</span>
+              <span class="stat-val-num">${state.guards.length}</span>
+              <span class="stat-badge-tag green">${state.guards.length > 0 ? 'Stable' : '0 Active'}</span>
             </div>
           </div>
           <div class="stat-icon-circle teal"><i data-lucide="shield-check"></i></div>
@@ -509,8 +575,8 @@
           <div class="stat-info-left">
             <h4>Total Flats</h4>
             <div style="display:flex; align-items:center; gap:8px;">
-              <span class="stat-val-num">450</span>
-              <span class="stat-badge-tag teal">98% Occ.</span>
+              <span class="stat-val-num">${state.residents.length > 0 ? new Set(state.residents.map(r => r.flat)).size : 0}</span>
+              <span class="stat-badge-tag teal">${state.residents.length > 0 ? 'Occupied' : '0 Occupied'}</span>
             </div>
           </div>
           <div class="stat-icon-circle gray"><i data-lucide="building"></i></div>
@@ -520,7 +586,7 @@
           <div class="stat-info-left">
             <h4>Visitor Requests</h4>
             <div style="display:flex; align-items:center; gap:8px;">
-              <span class="stat-val-num">24</span>
+              <span class="stat-val-num">${state.visitorRequests.filter(r => r.status === 'PENDING').length}</span>
               <span class="stat-badge-tag red">Pending</span>
             </div>
           </div>
@@ -563,7 +629,13 @@
                   </tr>
                 </thead>
                 <tbody>
-                  ${filteredResidents.map(r => `
+                  ${filteredResidents.length === 0 ? `
+                    <tr>
+                      <td colspan="5" style="text-align:center; color:var(--text-muted); padding:32px;">
+                        No residents registered yet. (0 Residents)
+                      </td>
+                    </tr>
+                  ` : filteredResidents.map(r => `
                     <tr>
                       <td>
                         <div style="display:flex; align-items:center; gap:12px;">
@@ -589,10 +661,10 @@
             </div>
 
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; font-size:12px; color:var(--text-muted);">
-              <span>Showing ${filteredResidents.length} of 1,248 residents</span>
+              <span>Showing ${filteredResidents.length} of ${state.residents.length} residents</span>
               <div style="display:flex; gap:8px;">
                 <button class="btn btn-secondary btn-sm" disabled>Previous</button>
-                <button class="btn btn-secondary btn-sm">Next</button>
+                <button class="btn btn-secondary btn-sm" disabled>Next</button>
               </div>
             </div>
           </div>
@@ -620,43 +692,24 @@
             </div>
 
             <div class="activity-timeline">
-              <div class="timeline-item">
-                <div class="timeline-dot blue"></div>
-                <div class="timeline-card">
-                  <div class="timeline-header">
-                    <span class="timeline-title">Visitor Entry</span>
-                    <span class="timeline-time">10:24 AM</span>
-                  </div>
-                  <div class="timeline-sub"><strong>Uber Delivery (Mark R.)</strong></div>
-                  <div style="font-size:11px; color:var(--text-muted);">Destination: Flat A-102</div>
-                  <span class="timeline-tag verified">Verified</span>
+              ${state.visitorRequests.length === 0 ? `
+                <div style="text-align:center; color:var(--text-muted); padding:24px; font-size:13px;">
+                  <i data-lucide="check-circle" style="width:24px; height:24px; margin:0 auto 6px; display:block; color:#10b981;"></i>
+                  No activity recorded yet. (0 Logged Events)
                 </div>
-              </div>
-
-              <div class="timeline-item">
-                <div class="timeline-dot red"></div>
-                <div class="timeline-card">
-                  <div class="timeline-header">
-                    <span class="timeline-title" style="color:var(--danger-red);">Security Alert</span>
-                    <span class="timeline-time">09:15 AM</span>
+              ` : state.visitorRequests.slice(0, 5).map(r => `
+                <div class="timeline-item">
+                  <div class="timeline-dot blue"></div>
+                  <div class="timeline-card">
+                    <div class="timeline-header">
+                      <span class="timeline-title">${r.visitorName}</span>
+                      <span class="timeline-time">${r.inTime || 'Today'}</span>
+                    </div>
+                    <div class="timeline-sub">Visiting Flat ${r.targetFlat} • ${r.purpose}</div>
+                    <span class="timeline-tag verified">${r.status}</span>
                   </div>
-                  <div class="timeline-sub"><strong>Gate 2 Sensor Triggered</strong></div>
-                  <div style="font-size:11px; color:var(--text-muted);">Unexpected perimeter proximity.</div>
-                  <span class="timeline-tag investigate" onclick="showToast('Dispatching guard squad to Gate 2', 'error')">Investigate</span>
                 </div>
-              </div>
-
-              <div class="timeline-item">
-                <div class="timeline-dot gray"></div>
-                <div class="timeline-card">
-                  <div class="timeline-header">
-                    <span class="timeline-title">Guard Shift Change</span>
-                    <span class="timeline-time">08:00 AM</span>
-                  </div>
-                  <div class="timeline-sub"><strong>Day Shift Active</strong></div>
-                  <div style="font-size:11px; color:var(--text-muted);">Supervisor: Sgt. Miller</div>
-                </div>
-              </div>
+              `).join('')}
             </div>
           </div>
         </div>
@@ -1024,7 +1077,13 @@
               </tr>
             </thead>
             <tbody>
-              ${state.visitorRequests.map(r => `
+              ${state.visitorRequests.length === 0 ? `
+                <tr>
+                  <td colspan="5" style="text-align:center; color:var(--text-muted); padding:32px;">
+                    No visitor logs recorded yet. (0 Visitor Logs)
+                  </td>
+                </tr>
+              ` : state.visitorRequests.map(r => `
                 <tr>
                   <td>
                     <div style="display:flex; align-items:center; gap:10px;">
@@ -1074,7 +1133,13 @@
               </tr>
             </thead>
             <tbody>
-              ${state.residents.map(r => `
+              ${state.residents.length === 0 ? `
+                <tr>
+                  <td colspan="6" style="text-align:center; color:var(--text-muted); padding:32px;">
+                    No residents in directory yet. (0 Residents)
+                  </td>
+                </tr>
+              ` : state.residents.map(r => `
                 <tr>
                   <td><strong>${r.name}</strong></td>
                   <td>${r.flat}</td>
@@ -1124,7 +1189,13 @@
               </tr>
             </thead>
             <tbody>
-              ${filteredGuards.map(g => `
+              ${filteredGuards.length === 0 ? `
+                <tr>
+                  <td colspan="5" style="text-align:center; color:var(--text-muted); padding:32px;">
+                    No security guards added to roster yet. (0 Guards)
+                  </td>
+                </tr>
+              ` : filteredGuards.map(g => `
                 <tr>
                   <td><strong>${g.name}</strong></td>
                   <td>${g.gate}</td>
@@ -1137,27 +1208,6 @@
               `).join('')}
             </tbody>
           </table>
-        </div>
-      </div>
-    `;
-  }
-
-  function renderSecurityAlertsTab() {
-    return `
-      <div class="card-box">
-        <h2 class="card-title-text" style="color:var(--danger-red); margin-bottom:16px;">Security Monitoring Feed</h2>
-        <div class="activity-timeline">
-          <div class="timeline-item">
-            <div class="timeline-dot red"></div>
-            <div class="timeline-card">
-              <div class="timeline-header">
-                <span class="timeline-title" style="color:var(--danger-red);">Gate 2 Sensor Triggered</span>
-                <span class="timeline-time">09:15 AM</span>
-              </div>
-              <div class="timeline-sub">Unexpected perimeter motion detected at North Boundary.</div>
-              <button class="btn btn-danger btn-sm" style="margin-top:10px;" onclick="showToast('Security Alert Dispatched to Guards!', 'error')">Dispatch Patrol</button>
-            </div>
-          </div>
         </div>
       </div>
     `;
@@ -1233,7 +1283,49 @@
         setTimeout(async () => {
           state.isAuthenticating = false;
           quickLogin(loginId, password);
-        }, 500);
+        }, 400);
+      });
+    }
+
+    const adminRegisterForm = document.getElementById('admin-register-form');
+    if (adminRegisterForm) {
+      adminRegisterForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fullName = document.getElementById('reg-admin-fullname').value;
+        const societyName = document.getElementById('reg-admin-society').value;
+        const loginId = document.getElementById('reg-admin-id').value;
+        const phone = document.getElementById('reg-admin-phone').value;
+        const password = document.getElementById('reg-admin-password').value;
+        const confirmPassword = document.getElementById('reg-admin-confirm').value;
+
+        if (password !== confirmPassword) {
+          showToast('Passwords do not match!', 'error');
+          return;
+        }
+        if (password.length < 6) {
+          showToast('Password must be at least 6 characters long!', 'error');
+          return;
+        }
+
+        state.isAuthenticating = true;
+        render();
+
+        setTimeout(() => {
+          state.isAuthenticating = false;
+          const newAdmin = {
+            id: Date.now(),
+            loginId: loginId,
+            fullName: fullName,
+            societyName: societyName,
+            phone: phone,
+            role: 'ADMIN',
+            mustResetPassword: false
+          };
+          saveSession(newAdmin, 'token_' + Date.now());
+          state.activeView = 'admin';
+          render();
+          showToast(`Admin Account Created! Welcome ${fullName} to GateSync.`, 'success');
+        }, 400);
       });
     }
 
@@ -1263,6 +1355,70 @@
       });
     }
   }
+
+  window.setAuthRole = function (role) {
+    state.authRole = role;
+    state.authMode = 'LOGIN';
+    render();
+  };
+
+  window.setAuthMode = function (mode) {
+    state.authMode = mode;
+    render();
+  };
+
+  window.quickLogin = function (loginId, password) {
+    loginId = (loginId || '').trim();
+    password = (password || '').trim();
+    const role = state.authRole || 'ADMIN';
+
+    if (role === 'RESIDENT' || loginId.toLowerCase().includes('resident')) {
+      let foundResident = state.residents.find(r => (r.loginId && r.loginId.toLowerCase() === loginId.toLowerCase()) || (r.phone && r.phone === loginId));
+      const user = {
+        id: foundResident ? foundResident.id : 3,
+        loginId: foundResident ? foundResident.loginId : (loginId || 'resident'),
+        fullName: foundResident ? foundResident.name : 'Resident',
+        role: 'RESIDENT',
+        blockNumber: foundResident ? foundResident.blockNumber : 'A',
+        flatNumber: foundResident ? foundResident.flatNumber : '101',
+        mustResetPassword: false
+      };
+      saveSession(user, 'token_' + Date.now());
+      state.activeView = 'resident';
+      render();
+      showToast(`Welcome back, ${user.fullName}!`, 'success');
+      return;
+    }
+
+    if (role === 'GUARD' || loginId.toLowerCase().includes('guard')) {
+      let foundGuard = state.guards.find(g => (g.loginId && g.loginId.toLowerCase() === loginId.toLowerCase()) || (g.phone && g.phone === loginId));
+      const user = {
+        id: foundGuard ? foundGuard.id : 2,
+        loginId: foundGuard ? foundGuard.loginId : (loginId || 'guard'),
+        fullName: foundGuard ? foundGuard.name : 'Security Guard',
+        role: 'GUARD',
+        mustResetPassword: false
+      };
+      saveSession(user, 'token_' + Date.now());
+      state.activeView = 'guard';
+      render();
+      showToast(`Guard Terminal active. Welcome, ${user.fullName}!`, 'success');
+      return;
+    }
+
+    // Default to Admin
+    const user = {
+      id: 1,
+      loginId: loginId || 'admin',
+      fullName: state.currentUser && state.currentUser.role === 'ADMIN' ? state.currentUser.fullName : 'System Admin',
+      role: 'ADMIN',
+      mustResetPassword: false
+    };
+    saveSession(user, 'token_' + Date.now());
+    state.activeView = 'admin';
+    render();
+    showToast(`Welcome to GateSync Admin Panel!`, 'success');
+  };
 
   // Helper Actions & Modals
   window.openSwitchRoleModal = function () {

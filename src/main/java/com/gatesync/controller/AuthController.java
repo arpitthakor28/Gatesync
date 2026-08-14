@@ -19,6 +19,11 @@ public class AuthController {
         return ResponseEntity.ok(authService.authenticate(req));
     }
 
+    @PostMapping("/register-admin")
+    public ResponseEntity<LoginResponse> registerAdmin(@RequestBody RegisterAdminRequest req) {
+        return ResponseEntity.ok(authService.registerAdmin(req));
+    }
+
     @PostMapping("/reset-password")
     public ResponseEntity<ApiResponse> resetPassword(@RequestBody PasswordResetRequest req) {
         return ResponseEntity.ok(authService.resetPassword(req));

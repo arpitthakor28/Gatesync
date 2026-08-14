@@ -12,6 +12,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+import com.gatesync.model.Role;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -46,6 +48,42 @@ public class AuthService {
                 .blockNumber(user.getBlockNumber())
                 .flatNumber(user.getFlatNumber())
                 .mustResetPassword(user.isMustResetPassword())
+                .build();
+    }
+
+    @Transactional
+    public LoginResponse registerAdmin(RegisterAdminRequest req) {
+        if (userRepository.findByLoginId(req.getLoginId()).isPresent()) {
+            throw new RuntimeException("Login ID already registered!");
+        }
+
+        User admin = User.builder()
+                .loginId(req.getLoginId())
+                .password(passwordEncoder.encode(req.getPassword()))
+                .fullName(req.getFullName())
+                .email(req.getEmail() != null ? req.getEmail() : req.getLoginId() + "@gatesync.in")
+                .phone(req.getPhone() != null ? req.getPhone() : "+91 98765 43210")
+                .role(Role.ADMIN)
+                .mustResetPassword(false)
+                .build();
+
+        User saved = userRepository.save(admin);
+        String mockToken = "jwt_" + UUID.randomUUID().toString();
+
+        auditLogRepository.save(AuditLog.builder()
+                .actorName(saved.getFullName())
+                .actorRole("ADMIN")
+                .actionCategory("SECURITY")
+                .description("New Admin account registered: " + saved.getLoginId())
+                .build());
+
+        return LoginResponse.builder()
+                .token(mockToken)
+                .userId(saved.getId())
+                .loginId(saved.getLoginId())
+                .fullName(saved.getFullName())
+                .role(saved.getRole())
+                .mustResetPassword(false)
                 .build();
     }
 
