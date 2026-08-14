@@ -49,6 +49,32 @@
     { title: 'Cab Driver', url: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=300&auto=format&fit=crop&q=80' }
   ];
 
+  function getDatabaseUsers() {
+    try {
+      const stored = localStorage.getItem('gatesync_db_users');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {}
+    const seed = [
+      { loginId: 'admin', password: '123', fullName: 'System Admin', role: 'ADMIN' },
+      { loginId: 'resident', password: '123', fullName: 'Amit Patel', role: 'RESIDENT', blockNumber: 'A', flatNumber: '101', phone: '9876543210' },
+      { loginId: 'guard', password: '123', fullName: 'Bahadur Thapa', role: 'GUARD', phone: '9812345678' }
+    ];
+    localStorage.setItem('gatesync_db_users', JSON.stringify(seed));
+    return seed;
+  }
+
+  function saveDatabaseUser(userObj) {
+    if (!userObj || !userObj.loginId) return;
+    const users = getDatabaseUsers();
+    const idx = users.findIndex(u => u.loginId && u.loginId.toLowerCase() === userObj.loginId.toLowerCase());
+    if (idx >= 0) {
+      users[idx] = { ...users[idx], ...userObj };
+    } else {
+      users.push(userObj);
+    }
+    localStorage.setItem('gatesync_db_users', JSON.stringify(users));
+  }
+
   // App Initialization
   document.addEventListener('DOMContentLoaded', () => {
     loadSavedSession();
@@ -1294,16 +1320,71 @@
     if (loginForm) {
       loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const loginId = (document.getElementById('login-id').value || '').trim();
+        const password = (document.getElementById('login-password').value || '').trim();
+        const selectedRole = state.authRole || 'RESIDENT';
+
+        if (!loginId || !password) {
+          showToast('Please enter both Login ID and Password.', 'error');
+          return;
+        }
+
         state.isAuthenticating = true;
         render();
 
-        const loginId = document.getElementById('login-id').value;
-        const password = document.getElementById('login-password').value;
+        // 1. Try Spring Boot Backend Authentication endpoint first
+        try {
+          const resp = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ loginId, password })
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            const user = {
+              id: data.userId || Date.now(),
+              loginId: data.loginId || loginId,
+              fullName: data.fullName || 'User',
+              role: data.role || selectedRole,
+              blockNumber: data.blockNumber || 'A',
+              flatNumber: data.flatNumber || '101',
+              mustResetPassword: data.mustResetPassword || false
+            };
+            saveDatabaseUser({ ...user, password });
+            saveSession(user, data.token || ('token_' + Date.now()));
+            state.isAuthenticating = false;
+            state.activeView = user.role.toLowerCase();
+            render();
+            showToast(`Welcome back, ${user.fullName}!`, 'success');
+            return;
+          }
+        } catch (err) {}
 
-        setTimeout(async () => {
+        // 2. Check Database users stored in localStorage database
+        const dbUsers = getDatabaseUsers();
+        const matched = dbUsers.find(u => 
+          (u.loginId && u.loginId.toLowerCase() === loginId.toLowerCase()) || 
+          (u.phone && u.phone === loginId)
+        );
+
+        if (matched) {
+          if (matched.password && matched.password !== password) {
+            state.isAuthenticating = false;
+            render();
+            showToast(`Incorrect password for account "${matched.loginId}"!`, 'error');
+            return;
+          }
+          saveSession(matched, 'token_' + Date.now());
           state.isAuthenticating = false;
-          quickLogin(loginId, password);
-        }, 400);
+          state.activeView = matched.role ? matched.role.toLowerCase() : selectedRole.toLowerCase();
+          render();
+          showToast(`Welcome back, ${matched.fullName}!`, 'success');
+          return;
+        }
+
+        // 3. Fallback quick login for new demo credentials
+        state.isAuthenticating = false;
+        quickLogin(loginId, password);
       });
     }
 
@@ -1311,10 +1392,10 @@
     if (adminRegisterForm) {
       adminRegisterForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const fullName = document.getElementById('reg-admin-fullname').value;
-        const societyName = document.getElementById('reg-admin-society').value;
-        const loginId = document.getElementById('reg-admin-id').value;
-        const phone = document.getElementById('reg-admin-phone').value;
+        const fullName = (document.getElementById('reg-admin-fullname').value || '').trim();
+        const societyName = (document.getElementById('reg-admin-society').value || '').trim();
+        const loginId = (document.getElementById('reg-admin-id').value || '').trim();
+        const phone = (document.getElementById('reg-admin-phone').value || '').trim();
         const password = document.getElementById('reg-admin-password').value;
         const confirmPassword = document.getElementById('reg-admin-confirm').value;
 
@@ -1327,25 +1408,43 @@
           return;
         }
 
+        const dbUsers = getDatabaseUsers();
+        if (dbUsers.some(u => u.loginId && u.loginId.toLowerCase() === loginId.toLowerCase())) {
+          showToast(`Login ID "${loginId}" is already registered. Please choose another username.`, 'error');
+          return;
+        }
+
         state.isAuthenticating = true;
         render();
 
-        setTimeout(() => {
-          state.isAuthenticating = false;
-          const newAdmin = {
-            id: Date.now(),
-            loginId: loginId,
-            fullName: fullName,
-            societyName: societyName,
-            phone: phone,
-            role: 'ADMIN',
-            mustResetPassword: false
-          };
-          saveSession(newAdmin, 'token_' + Date.now());
-          state.activeView = 'admin';
-          render();
-          showToast(`Admin Account Created! Welcome ${fullName} to GateSync.`, 'success');
-        }, 400);
+        const newAdmin = {
+          id: Date.now(),
+          loginId: loginId,
+          password: password,
+          fullName: fullName,
+          societyName: societyName,
+          phone: phone,
+          role: 'ADMIN',
+          mustResetPassword: false
+        };
+
+        // Try backend registration endpoint
+        try {
+          await fetch('/api/auth/register-admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fullName, societyName, loginId, phone, password })
+          });
+        } catch (err) {}
+
+        // Save into local user database
+        saveDatabaseUser(newAdmin);
+        saveSession(newAdmin, 'token_' + Date.now());
+
+        state.isAuthenticating = false;
+        state.activeView = 'admin';
+        render();
+        showToast(`Admin Account Registered & Saved to Database! Welcome ${fullName}.`, 'success');
       });
     }
 
@@ -2200,24 +2299,31 @@
       const flatNum = document.getElementById('au-flat').value;
       const phone = document.getElementById('au-phone').value;
       const loginId = document.getElementById('au-login').value;
+      const passVal = document.getElementById('au-password') ? document.getElementById('au-password').value : '123';
       const flatStr = `${block}-${flatNum}`;
       const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
 
       const newRes = {
         id: Date.now(),
         name,
+        fullName: name,
         initials,
         flat: flatStr,
+        flatNumber: flatNum,
+        blockNumber: block,
         loginId,
+        password: passVal || '123',
         phone,
         backupPhone: '',
+        role: 'RESIDENT',
         status: 'Active',
         avatarBg: 'blue'
       };
 
+      saveDatabaseUser(newRes);
       state.residents.unshift(newRes);
       closeModal();
-      showToast(`Resident ${name} (Flat ${flatStr}) added successfully!`, 'success');
+      showToast(`Resident ${name} (Flat ${flatStr}) saved to database!`, 'success');
       render();
     });
   };
@@ -2340,10 +2446,24 @@
       const phone = document.getElementById('ag-phone').value;
       const shift = document.getElementById('ag-shift').value;
       const gate = document.getElementById('ag-gate').value;
+      const guardLoginId = 'guard_' + name.toLowerCase().replace(/\s+/g, '');
 
-      state.guards.push({ id: Date.now(), name, phone, shift, gate });
+      const newGuard = {
+        id: Date.now(),
+        name,
+        fullName: name,
+        loginId: guardLoginId,
+        password: '123',
+        phone,
+        shift,
+        gate,
+        role: 'GUARD'
+      };
+
+      saveDatabaseUser(newGuard);
+      state.guards.push(newGuard);
       closeModal();
-      showToast(`Guard ${name} added to roster!`, 'success');
+      showToast(`Guard ${name} saved to database! (Login ID: ${guardLoginId})`, 'success');
       render();
     });
   };
