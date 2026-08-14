@@ -490,8 +490,8 @@
               </div>
 
               <div class="user-profile-pill" onclick="openProfileModal()">
-                <div class="avatar-initials">${user.fullName ? user.fullName.substring(0, 2).toUpperCase() : 'AD'}</div>
-                <span class="user-profile-name">${user.fullName || 'Admin'}</span>
+                <div class="avatar-initials">${user.fullName ? user.fullName.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().substring(0, 2) : 'AP'}</div>
+                <span class="user-profile-name">${user.fullName || 'Resident'}</span>
               </div>
             </div>
           </header>
@@ -1398,14 +1398,22 @@
     const role = state.authRole || 'ADMIN';
 
     if (role === 'RESIDENT' || loginId.toLowerCase().includes('resident')) {
-      let foundResident = state.residents.find(r => (r.loginId && r.loginId.toLowerCase() === loginId.toLowerCase()) || (r.phone && r.phone === loginId));
+      let foundResident = state.residents.find(r => (r.loginId && r.loginId.toLowerCase() === loginId.toLowerCase()) || (r.phone && r.phone === loginId) || (r.name && r.name.toLowerCase() === loginId.toLowerCase()));
+
+      let resName = 'Amit Patel';
+      if (foundResident && (foundResident.name || foundResident.fullName)) {
+        resName = foundResident.name || foundResident.fullName;
+      } else if (loginId && loginId.toLowerCase() !== 'resident') {
+        resName = loginId.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      }
+
       const user = {
-        id: foundResident ? foundResident.id : 3,
+        id: foundResident ? foundResident.id : Date.now(),
         loginId: foundResident ? foundResident.loginId : (loginId || 'resident'),
-        fullName: foundResident ? foundResident.name : 'Resident',
+        fullName: resName,
         role: 'RESIDENT',
-        blockNumber: foundResident ? foundResident.blockNumber : 'A',
-        flatNumber: foundResident ? foundResident.flatNumber : '101',
+        blockNumber: foundResident ? (foundResident.blockNumber || 'A') : 'A',
+        flatNumber: foundResident ? (foundResident.flatNumber || '101') : '101',
         mustResetPassword: false
       };
       saveSession(user, 'token_' + Date.now());
@@ -1416,11 +1424,19 @@
     }
 
     if (role === 'GUARD' || loginId.toLowerCase().includes('guard')) {
-      let foundGuard = state.guards.find(g => (g.loginId && g.loginId.toLowerCase() === loginId.toLowerCase()) || (g.phone && g.phone === loginId));
+      let foundGuard = state.guards.find(g => (g.loginId && g.loginId.toLowerCase() === loginId.toLowerCase()) || (g.phone && g.phone === loginId) || (g.name && g.name.toLowerCase() === loginId.toLowerCase()));
+
+      let guardName = 'Security Guard';
+      if (foundGuard && (foundGuard.name || foundGuard.fullName)) {
+        guardName = foundGuard.name || foundGuard.fullName;
+      } else if (loginId && loginId.toLowerCase() !== 'guard') {
+        guardName = loginId.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      }
+
       const user = {
-        id: foundGuard ? foundGuard.id : 2,
+        id: foundGuard ? foundGuard.id : Date.now(),
         loginId: foundGuard ? foundGuard.loginId : (loginId || 'guard'),
-        fullName: foundGuard ? foundGuard.name : 'Security Guard',
+        fullName: guardName,
         role: 'GUARD',
         mustResetPassword: false
       };
