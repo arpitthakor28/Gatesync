@@ -221,7 +221,7 @@
             <div class="brand-icon"><i data-lucide="shield-check"></i></div>
             <div class="brand-title-wrap">
               <div class="brand-text" style="font-size: 24px; color:white;">GateSync</div>
-              <span class="brand-subtext" style="color:#94a3b8;">Community Secure</span>
+              <span class="brand-subtext" style="color:#94a3b8;">Community Security</span>
             </div>
           </div>
           <div style="display:flex; gap:12px;">
@@ -448,7 +448,7 @@
             <div class="brand-icon"><i data-lucide="shield"></i></div>
             <div class="brand-title-wrap">
               <div class="brand-text">GateSync</div>
-              <span class="brand-subtext">Community Secure</span>
+              <span class="brand-subtext">Community Security</span>
             </div>
           </div>
 
