@@ -293,15 +293,15 @@
             `}
 
             ${(role !== 'ADMIN' || mode === 'LOGIN') ? `
-              <form id="login-form">
+              <form id="login-form" autocomplete="off">
                 <div class="form-group" style="margin-bottom:16px;">
-                  <label>${role === 'RESIDENT' ? 'Resident ID / Username / Phone' : role === 'GUARD' ? 'Guard ID / Username' : 'Admin Username / ID'}</label>
-                  <input type="text" id="login-id" class="form-control" placeholder="${role === 'RESIDENT' ? 'Enter Resident ID (e.g. resident)' : role === 'GUARD' ? 'Enter Guard ID (e.g. guard)' : 'Enter Admin ID (e.g. admin)'}" required value="">
+                  <label>${role === 'RESIDENT' ? 'Resident ID / Mobile Number' : role === 'GUARD' ? 'Guard ID / Username' : 'Admin Username / ID'}</label>
+                  <input type="text" id="login-id" class="form-control" placeholder="${role === 'RESIDENT' ? 'Enter Resident ID' : role === 'GUARD' ? 'Enter Guard ID' : 'Enter Admin ID'}" required value="" autocomplete="off" name="gatesync_user_id_${Date.now()}">
                 </div>
                 <div class="form-group" style="margin-bottom:20px;">
                   <label>Password</label>
                   <div style="position:relative;">
-                    <input type="password" id="login-password" class="form-control" placeholder="••••••••" required value="" style="padding-right:42px;">
+                    <input type="password" id="login-password" class="form-control" placeholder="Enter Password" required value="" autocomplete="new-password" name="gatesync_user_pass_${Date.now()}" style="padding-right:42px;">
                     <button type="button" onclick="togglePasswordVisibility('login-password', this)" title="Show/Hide Password" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px; display:flex; align-items:center;">
                       <i data-lucide="eye" style="width:18px; height:18px;"></i>
                     </button>
@@ -2164,7 +2164,7 @@
                 <div class="form-group">
                   <label>Initial Password</label>
                   <div style="position:relative;">
-                    <input type="password" id="au-password" class="form-control" placeholder="••••••••" value="password123" required style="padding-right:42px;">
+                    <input type="password" id="au-password" class="form-control" placeholder="Enter Initial Password" value="" required style="padding-right:42px;">
                     <button type="button" onclick="togglePasswordVisibility('au-password', this)" title="Show/Hide Password" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px; display:flex; align-items:center;">
                       <i data-lucide="eye" style="width:18px; height:18px;"></i>
                     </button>
