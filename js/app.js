@@ -319,23 +319,23 @@
               </form>
             ` : `
               <!-- Admin Register Form (Admin Only) -->
-              <form id="admin-register-form">
+              <form id="admin-register-form" autocomplete="off">
                 <div class="form-group" style="margin-bottom:12px;">
                   <label>Full Name</label>
-                  <input type="text" id="reg-admin-fullname" class="form-control" placeholder="e.g. Rajesh Sharma" required>
+                  <input type="text" id="reg-admin-fullname" class="form-control" placeholder="Enter Full Name" required value="" autocomplete="off">
                 </div>
                 <div class="form-group" style="margin-bottom:12px;">
                   <label>Society Name</label>
-                  <input type="text" id="reg-admin-society" class="form-control" placeholder="e.g. Royal Palms Estate" value="Royal Palms Estate" required>
+                  <input type="text" id="reg-admin-society" class="form-control" placeholder="Enter Society Name" value="" required autocomplete="off">
                 </div>
                 <div class="form-grid" style="margin-bottom:12px;">
                   <div class="form-group">
                     <label>Admin Username / ID</label>
-                    <input type="text" id="reg-admin-id" class="form-control" placeholder="e.g. admin_main" required>
+                    <input type="text" id="reg-admin-id" class="form-control" placeholder="Enter Admin Username" required value="" autocomplete="off">
                   </div>
                   <div class="form-group">
                     <label>Phone Number</label>
-                    <input type="tel" id="reg-admin-phone" class="form-control" placeholder="9876543210" required>
+                    <input type="tel" id="reg-admin-phone" class="form-control" placeholder="Enter Phone Number" required value="" autocomplete="off">
                   </div>
                 </div>
                 <div class="form-grid" style="margin-bottom:20px;">
@@ -1235,11 +1235,11 @@
         <div class="form-grid">
           <div class="form-group">
             <label>Society Name</label>
-            <input type="text" class="form-control" value="Royal Palms Estate">
+            <input type="text" class="form-control" placeholder="Enter Society Name" value="">
           </div>
           <div class="form-group">
             <label>Auto-Expire Visitor Request (Seconds)</label>
-            <input type="number" class="form-control" value="60">
+            <input type="number" class="form-control" placeholder="60" value="">
           </div>
         </div>
         <button class="btn btn-primary" onclick="showToast('Settings updated successfully!', 'success')">Save Configurations</button>
@@ -1611,7 +1611,7 @@
           <div class="modal-body">
             <div class="form-group" style="margin-bottom:12px;">
               <label>Event Title</label>
-              <input type="text" id="party-name" class="form-control" placeholder="e.g. Birthday Party" value="Clubhouse Birthday Party">
+              <input type="text" id="party-name" class="form-control" placeholder="Enter Event Title" value="">
             </div>
             <div class="form-grid">
               <div class="form-group">
@@ -1624,7 +1624,7 @@
               </div>
               <div class="form-group">
                 <label>Expected Guests</label>
-                <input type="number" class="form-control" value="25">
+                <input type="number" class="form-control" placeholder="Enter number of guests" value="">
               </div>
             </div>
           </div>
@@ -1657,7 +1657,7 @@
           <div class="modal-body">
             <div class="form-group" style="margin-bottom:12px;">
               <label>Problem Title</label>
-              <input type="text" id="pr-title" class="form-control" placeholder="e.g. Water Pressure Issue in Block A">
+              <input type="text" id="pr-title" class="form-control" placeholder="Enter Problem Title">
             </div>
             <div class="form-group" style="margin-bottom:12px;">
               <label>Category</label>
@@ -2135,7 +2135,7 @@
             <div class="modal-body">
               <div class="form-group" style="margin-bottom:12px;">
                 <label>Full Name</label>
-                <input type="text" id="au-name" class="form-control" placeholder="e.g. Ramesh Shah" required>
+                <input type="text" id="au-name" class="form-control" placeholder="Enter Full Name" required>
               </div>
               <div class="form-grid">
                 <div class="form-group">
@@ -2149,17 +2149,17 @@
                 </div>
                 <div class="form-group">
                   <label>Flat Number</label>
-                  <input type="text" id="au-flat" class="form-control" placeholder="e.g. 302" required>
+                  <input type="text" id="au-flat" class="form-control" placeholder="Enter Flat Number" required>
                 </div>
               </div>
               <div class="form-group" style="margin-bottom:12px;">
                 <label>Contact Phone (+91 - 10 Digits)</label>
-                <input type="tel" id="au-phone" class="form-control" placeholder="e.g. 9876543210" maxlength="10" pattern="[0-9]{10}" oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,10)" required>
+                <input type="tel" id="au-phone" class="form-control" placeholder="Enter 10-digit Phone Number" maxlength="10" pattern="[0-9]{10}" oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,10)" required>
               </div>
               <div class="form-grid">
                 <div class="form-group">
                   <label>Login Username</label>
-                  <input type="text" id="au-login" class="form-control" placeholder="e.g. res_a302" required>
+                  <input type="text" id="au-login" class="form-control" placeholder="Enter Username" required>
                 </div>
                 <div class="form-group">
                   <label>Initial Password</label>
@@ -2289,11 +2289,11 @@
             <div class="modal-body">
               <div class="form-group" style="margin-bottom:12px;">
                 <label>Guard Full Name</label>
-                <input type="text" id="ag-name" class="form-control" placeholder="e.g. Bahadur Thapa" required>
+                <input type="text" id="ag-name" class="form-control" placeholder="Enter Guard Full Name" required>
               </div>
               <div class="form-group" style="margin-bottom:12px;">
                 <label>Phone Number (+91)</label>
-                <input type="tel" id="ag-phone" class="form-control" placeholder="+91 98123 45678" required>
+                <input type="tel" id="ag-phone" class="form-control" placeholder="Enter Phone Number" required>
               </div>
               <div class="form-grid">
                 <div class="form-group">
