@@ -322,27 +322,27 @@
               <form id="admin-register-form" autocomplete="off">
                 <div class="form-group" style="margin-bottom:12px;">
                   <label>Full Name</label>
-                  <input type="text" id="reg-admin-fullname" class="form-control" placeholder="Enter Full Name" required value="" autocomplete="off">
+                  <input type="text" id="reg-admin-fullname" class="form-control" placeholder="Enter Full Name" required value="" autocomplete="off" name="admin_fullname_${Date.now()}">
                 </div>
                 <div class="form-group" style="margin-bottom:12px;">
                   <label>Society Name</label>
-                  <input type="text" id="reg-admin-society" class="form-control" placeholder="Enter Society Name" value="" required autocomplete="off">
+                  <input type="text" id="reg-admin-society" class="form-control" placeholder="Enter Society Name" value="" required autocomplete="off" name="admin_society_${Date.now()}">
                 </div>
                 <div class="form-grid" style="margin-bottom:12px;">
                   <div class="form-group">
                     <label>Admin Username / ID</label>
-                    <input type="text" id="reg-admin-id" class="form-control" placeholder="Enter Admin Username" required value="" autocomplete="off">
+                    <input type="text" id="reg-admin-id" class="form-control" placeholder="Enter Admin Username" required value="" autocomplete="off" name="admin_id_${Date.now()}">
                   </div>
                   <div class="form-group">
                     <label>Phone Number</label>
-                    <input type="tel" id="reg-admin-phone" class="form-control" placeholder="Enter Phone Number" required value="" autocomplete="off">
+                    <input type="tel" id="reg-admin-phone" class="form-control" placeholder="Enter Phone Number" required value="" autocomplete="off" name="admin_phone_${Date.now()}">
                   </div>
                 </div>
                 <div class="form-grid" style="margin-bottom:20px;">
                   <div class="form-group">
                     <label>Password</label>
                     <div style="position:relative;">
-                      <input type="password" id="reg-admin-password" class="form-control" placeholder="••••••••" required style="padding-right:42px;">
+                      <input type="password" id="reg-admin-password" class="form-control" placeholder="Enter Password" required value="" autocomplete="new-password" name="admin_pass_${Date.now()}" style="padding-right:42px;">
                       <button type="button" onclick="togglePasswordVisibility('reg-admin-password', this)" title="Show/Hide Password" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px; display:flex; align-items:center;">
                         <i data-lucide="eye" style="width:18px; height:18px;"></i>
                       </button>
@@ -351,7 +351,7 @@
                   <div class="form-group">
                     <label>Confirm Password</label>
                     <div style="position:relative;">
-                      <input type="password" id="reg-admin-confirm" class="form-control" placeholder="••••••••" required style="padding-right:42px;">
+                      <input type="password" id="reg-admin-confirm" class="form-control" placeholder="Confirm Password" required value="" autocomplete="new-password" name="admin_confirm_${Date.now()}" style="padding-right:42px;">
                       <button type="button" onclick="togglePasswordVisibility('reg-admin-confirm', this)" title="Show/Hide Password" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px; display:flex; align-items:center;">
                         <i data-lucide="eye" style="width:18px; height:18px;"></i>
                       </button>
