@@ -296,15 +296,20 @@
               <form id="login-form">
                 <div class="form-group" style="margin-bottom:16px;">
                   <label>${role === 'RESIDENT' ? 'Resident ID / Username / Phone' : role === 'GUARD' ? 'Guard ID / Username' : 'Admin Username / ID'}</label>
-                  <input type="text" id="login-id" class="form-control" placeholder="${role === 'RESIDENT' ? 'res_a101 or resident' : role === 'GUARD' ? 'guard_01 or guard' : 'admin'}" required value="${role === 'RESIDENT' ? 'resident' : role === 'GUARD' ? 'guard' : 'admin'}">
+                  <input type="text" id="login-id" class="form-control" placeholder="${role === 'RESIDENT' ? 'Enter Resident ID (e.g. resident)' : role === 'GUARD' ? 'Enter Guard ID (e.g. guard)' : 'Enter Admin ID (e.g. admin)'}" required value="">
                 </div>
                 <div class="form-group" style="margin-bottom:20px;">
                   <label>Password</label>
-                  <input type="password" id="login-password" class="form-control" placeholder="••••••••" required value="${role === 'RESIDENT' ? 'resident123' : role === 'GUARD' ? 'guard123' : 'admin123'}">
+                  <div style="position:relative;">
+                    <input type="password" id="login-password" class="form-control" placeholder="••••••••" required value="" style="padding-right:42px;">
+                    <button type="button" onclick="togglePasswordVisibility('login-password', this)" title="Show/Hide Password" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px; display:flex; align-items:center;">
+                      <i data-lucide="eye" style="width:18px; height:18px;"></i>
+                    </button>
+                  </div>
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; font-size:12px;">
                   <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-                    <input type="checkbox" checked> Remember me
+                    <input type="checkbox"> Remember me
                   </label>
                   <a href="#" onclick="openForgotPasswordModal()" style="color:var(--primary-blue); text-decoration:none; font-weight:600;">Forgot Password?</a>
                 </div>
@@ -336,11 +341,21 @@
                 <div class="form-grid" style="margin-bottom:20px;">
                   <div class="form-group">
                     <label>Password</label>
-                    <input type="password" id="reg-admin-password" class="form-control" placeholder="••••••••" required>
+                    <div style="position:relative;">
+                      <input type="password" id="reg-admin-password" class="form-control" placeholder="••••••••" required style="padding-right:42px;">
+                      <button type="button" onclick="togglePasswordVisibility('reg-admin-password', this)" title="Show/Hide Password" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px; display:flex; align-items:center;">
+                        <i data-lucide="eye" style="width:18px; height:18px;"></i>
+                      </button>
+                    </div>
                   </div>
                   <div class="form-group">
                     <label>Confirm Password</label>
-                    <input type="password" id="reg-admin-confirm" class="form-control" placeholder="••••••••" required>
+                    <div style="position:relative;">
+                      <input type="password" id="reg-admin-confirm" class="form-control" placeholder="••••••••" required style="padding-right:42px;">
+                      <button type="button" onclick="togglePasswordVisibility('reg-admin-confirm', this)" title="Show/Hide Password" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px; display:flex; align-items:center;">
+                        <i data-lucide="eye" style="width:18px; height:18px;"></i>
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <button type="submit" id="reg-admin-submit-btn" class="btn btn-primary" style="width:100%; padding:12px; background:var(--accent-teal);">
@@ -1245,12 +1260,22 @@
           <form id="password-reset-form">
             <div class="form-group" style="margin-bottom:14px;">
               <label>New Password</label>
-              <input type="password" id="reset-new" class="form-control" placeholder="At least 8 chars" required>
+              <div style="position:relative;">
+                <input type="password" id="reset-new" class="form-control" placeholder="At least 8 chars" required style="padding-right:42px;">
+                <button type="button" onclick="togglePasswordVisibility('reset-new', this)" title="Show/Hide Password" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px; display:flex; align-items:center;">
+                  <i data-lucide="eye" style="width:18px; height:18px;"></i>
+                </button>
+              </div>
             </div>
 
             <div class="form-group" style="margin-bottom:20px;">
               <label>Confirm New Password</label>
-              <input type="password" id="reset-confirm" class="form-control" required>
+              <div style="position:relative;">
+                <input type="password" id="reset-confirm" class="form-control" placeholder="At least 8 chars" required style="padding-right:42px;">
+                <button type="button" onclick="togglePasswordVisibility('reset-confirm', this)" title="Show/Hide Password" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px; display:flex; align-items:center;">
+                  <i data-lucide="eye" style="width:18px; height:18px;"></i>
+                </button>
+              </div>
             </div>
 
             <button type="submit" class="btn btn-primary" style="width:100%; padding:12px;"><i data-lucide="check-shield"></i> Save & Continue to Dashboard</button>
@@ -1963,6 +1988,18 @@
     lucide.createIcons();
   };
 
+  window.togglePasswordVisibility = function (inputId, btnEl) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const isPassword = input.type === 'password';
+    input.type = isPassword ? 'text' : 'password';
+    if (btnEl) {
+      const iconName = isPassword ? 'eye-off' : 'eye';
+      btnEl.innerHTML = `<i data-lucide="${iconName}" style="width:18px; height:18px;"></i>`;
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+  };
+
   window.openChangePasswordModal = function () {
     const container = document.getElementById('modal-container');
     container.innerHTML = `
@@ -1976,15 +2013,30 @@
             <div class="modal-body">
               <div class="form-group" style="margin-bottom:12px;">
                 <label>Current Password</label>
-                <input type="password" id="cp-current" class="form-control" placeholder="••••••••" required>
+                <div style="position:relative;">
+                  <input type="password" id="cp-current" class="form-control" placeholder="••••••••" required style="padding-right:42px;">
+                  <button type="button" onclick="togglePasswordVisibility('cp-current', this)" title="Show/Hide Password" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px; display:flex; align-items:center;">
+                    <i data-lucide="eye" style="width:18px; height:18px;"></i>
+                  </button>
+                </div>
               </div>
               <div class="form-group" style="margin-bottom:12px;">
                 <label>New Password</label>
-                <input type="password" id="cp-new" class="form-control" placeholder="Minimum 6 characters" required>
+                <div style="position:relative;">
+                  <input type="password" id="cp-new" class="form-control" placeholder="Minimum 6 characters" required style="padding-right:42px;">
+                  <button type="button" onclick="togglePasswordVisibility('cp-new', this)" title="Show/Hide Password" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px; display:flex; align-items:center;">
+                    <i data-lucide="eye" style="width:18px; height:18px;"></i>
+                  </button>
+                </div>
               </div>
               <div class="form-group">
                 <label>Confirm New Password</label>
-                <input type="password" id="cp-confirm" class="form-control" placeholder="••••••••" required>
+                <div style="position:relative;">
+                  <input type="password" id="cp-confirm" class="form-control" placeholder="••••••••" required style="padding-right:42px;">
+                  <button type="button" onclick="togglePasswordVisibility('cp-confirm', this)" title="Show/Hide Password" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px; display:flex; align-items:center;">
+                    <i data-lucide="eye" style="width:18px; height:18px;"></i>
+                  </button>
+                </div>
               </div>
             </div>
             <div class="modal-footer">
@@ -2111,7 +2163,12 @@
                 </div>
                 <div class="form-group">
                   <label>Initial Password</label>
-                  <input type="password" id="au-password" class="form-control" placeholder="••••••••" value="password123" required>
+                  <div style="position:relative;">
+                    <input type="password" id="au-password" class="form-control" placeholder="••••••••" value="password123" required style="padding-right:42px;">
+                    <button type="button" onclick="togglePasswordVisibility('au-password', this)" title="Show/Hide Password" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px; display:flex; align-items:center;">
+                      <i data-lucide="eye" style="width:18px; height:18px;"></i>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
