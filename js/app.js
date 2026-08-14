@@ -479,11 +479,6 @@
             </div>
 
             <div class="header-actions">
-              <div class="active-page-badge ${role}" onclick="openSwitchRoleModal()" style="cursor:pointer;" title="Click to Switch Portal/Account">
-                <i data-lucide="${role === 'ADMIN' ? 'shield' : role === 'GUARD' ? 'shield-check' : 'home'}" style="width:14px; height:14px;"></i>
-                <span>${role === 'GUARD' ? 'GUARD TERMINAL' : role === 'RESIDENT' ? 'RESIDENT PORTAL' : 'ADMIN DASHBOARD'} ▾</span>
-              </div>
-
               <div class="notification-bell" onclick="toggleNotificationDrawer()">
                 <i data-lucide="bell"></i>
                 ${unreadCount > 0 ? `<span class="bell-badge-dot"></span>` : ''}
