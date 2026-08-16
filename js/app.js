@@ -50,17 +50,36 @@
   ];
 
   function getDatabaseUsers() {
+    let users = [];
     try {
       const stored = localStorage.getItem('gatesync_db_users');
-      if (stored) return JSON.parse(stored);
+      if (stored) users = JSON.parse(stored);
     } catch (e) {}
+
     const seed = [
-      { loginId: 'admin', password: '123', fullName: 'System Admin', role: 'ADMIN' },
-      { loginId: 'resident', password: '123', fullName: 'Amit Patel', role: 'RESIDENT', blockNumber: 'A', flatNumber: '101', phone: '9876543210' },
-      { loginId: 'guard', password: '123', fullName: 'Bahadur Thapa', role: 'GUARD', phone: '9812345678' }
+      { id: 1, loginId: 'admin', password: '123', fullName: 'System Admin', role: 'ADMIN', phone: '9999999999' },
+      { id: 2, loginId: 'resident', password: '123', fullName: 'Amit Patel', name: 'Amit Patel', role: 'RESIDENT', blockNumber: 'A', flatNumber: '101', flat: 'A-101', phone: '9876543210' },
+      { id: 3, loginId: 'priya', password: '123', fullName: 'Priya Sharma', name: 'Priya Sharma', role: 'RESIDENT', blockNumber: 'A', flatNumber: '102', flat: 'A-102', phone: '9876543211' },
+      { id: 4, loginId: 'rajesh', password: '123', fullName: 'Rajesh Kumar', name: 'Rajesh Kumar', role: 'RESIDENT', blockNumber: 'B', flatNumber: '201', flat: 'B-201', phone: '9876543212' },
+      { id: 5, loginId: 'sneha', password: '123', fullName: 'Sneha Gupta', name: 'Sneha Gupta', role: 'RESIDENT', blockNumber: 'B', flatNumber: '202', flat: 'B-202', phone: '9876543213' },
+      { id: 6, loginId: 'vikram', password: '123', fullName: 'Vikram Singh', name: 'Vikram Singh', role: 'RESIDENT', blockNumber: 'C', flatNumber: '301', flat: 'C-301', phone: '9876543214' },
+      { id: 7, loginId: 'ananya', password: '123', fullName: 'Ananya Verma', name: 'Ananya Verma', role: 'RESIDENT', blockNumber: 'C', flatNumber: '302', flat: 'C-302', phone: '9876543215' },
+      { id: 8, loginId: 'guard', password: '123', fullName: 'Bahadur Thapa', name: 'Bahadur Thapa', role: 'GUARD', phone: '9812345678', gate: 'Main Gate A', shift: 'DAY' },
+      { id: 9, loginId: 'ramesh_guard', password: '123', fullName: 'Ramesh Singh', name: 'Ramesh Singh', role: 'GUARD', phone: '9812345679', gate: 'North Service Gate B', shift: 'NIGHT' }
     ];
-    localStorage.setItem('gatesync_db_users', JSON.stringify(seed));
-    return seed;
+
+    let updated = false;
+    seed.forEach(s => {
+      if (!users.some(u => u.loginId && u.loginId.toLowerCase() === s.loginId.toLowerCase())) {
+        users.push(s);
+        updated = true;
+      }
+    });
+
+    if (updated || !localStorage.getItem('gatesync_db_users')) {
+      localStorage.setItem('gatesync_db_users', JSON.stringify(users));
+    }
+    return users;
   }
 
   function saveDatabaseUser(userObj) {
@@ -1472,22 +1491,32 @@
 
         // 2. Check Database users stored in registered accounts database
         const dbUsers = getDatabaseUsers();
-        const matched = dbUsers.find(u => 
-          (u.loginId && u.loginId.toLowerCase() === loginId.toLowerCase()) || 
-          (u.phone && (u.phone === loginId || u.phone.replace(/[^0-9]/g,'') === loginId.replace(/[^0-9]/g,'')))
-        );
+        const cleanInput = loginId.toLowerCase().replace(/\s+/g, '');
+        const inputPhone = loginId.replace(/[^0-9]/g, '');
+        const inputFlat = cleanInput.replace(/[^a-z0-9]/g, '');
+
+        const matched = dbUsers.find(u => {
+          const uRole = (u.role || '').toUpperCase();
+          if (uRole !== selectedRole) return false;
+
+          const uLogin = (u.loginId || '').toLowerCase().replace(/\s+/g, '');
+          const uPhone = (u.phone || '').replace(/[^0-9]/g, '');
+          const uName = (u.fullName || u.name || '').toLowerCase().replace(/\s+/g, '');
+          const uFlatStr = (u.flat || (u.blockNumber && u.flatNumber ? u.blockNumber + '-' + u.flatNumber : u.flatNumber) || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+          const matchLogin = uLogin && uLogin === cleanInput;
+          const matchPhone = inputPhone.length >= 7 && uPhone.includes(inputPhone);
+          const matchName = uName && (uName === cleanInput || uName.includes(cleanInput));
+          const matchFlat = uFlatStr && (uFlatStr === inputFlat || uFlatStr.endsWith(inputFlat) || inputFlat.endsWith(uFlatStr));
+
+          return matchLogin || matchPhone || matchName || matchFlat;
+        });
 
         if (matched) {
           if (matched.password && matched.password !== password) {
             state.isAuthenticating = false;
             render();
             showToast(`Incorrect password for ${selectedRole.toLowerCase()} account "${loginId}"!`, 'error');
-            return;
-          }
-          if (matched.role && matched.role !== selectedRole) {
-            state.isAuthenticating = false;
-            render();
-            showToast(`Account "${loginId}" is registered as ${matched.role}. Please click the "${matched.role}" tab above to sign in.`, 'error');
             return;
           }
 
