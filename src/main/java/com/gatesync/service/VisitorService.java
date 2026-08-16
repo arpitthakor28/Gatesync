@@ -2,6 +2,7 @@ package com.gatesync.service;
 
 import com.gatesync.dto.VisitorDtos.*;
 import com.gatesync.model.*;
+import com.gatesync.notification.NotificationService;
 import com.gatesync.repository.jpa.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -10,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -19,7 +21,9 @@ public class VisitorService {
     private final VisitorRequestRepository visitorRequestRepository;
     private final PreApprovedPassRepository preApprovedPassRepository;
     private final AuditLogRepository auditLogRepository;
+    private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final NotificationService notificationService;
 
     @Transactional
     public VisitorRequest registerVisitor(VisitorRegistrationRequest req) {
@@ -46,21 +50,14 @@ public class VisitorService {
                 .description("Registered new visitor '" + saved.getVisitorName() + "' for Flat " + saved.getTargetBlock() + "-" + saved.getTargetFlat())
                 .build());
 
-        // Dispatch WebSocket Realtime Alert to target resident channel
-        NotificationEvent event = NotificationEvent.builder()
-                .type("VISITOR_NEW")
-                .requestId(saved.getId())
-                .visitorName(saved.getVisitorName())
-                .purpose(saved.getPurpose())
-                .photoUrl(saved.getPhotoUrl())
-                .targetBlock(saved.getTargetBlock())
-                .targetFlat(saved.getTargetFlat())
-                .status(saved.getStatus())
-                .timestamp(saved.getCreatedAt())
-                .build();
+        // Find Target Resident
+        Optional<User> targetUser = userRepository.findByBlockNumberAndFlatNumber(
+                saved.getTargetBlock() != null ? saved.getTargetBlock() : "A",
+                saved.getTargetFlat() != null ? saved.getTargetFlat() : "101"
+        );
 
-        messagingTemplate.convertAndSend("/topic/resident/" + saved.getTargetBlock() + "-" + saved.getTargetFlat(), event);
-        messagingTemplate.convertAndSend("/topic/guard/queue", event);
+        // Dispatch Multi-channel Notification (WebSocket + SMS fallback + Audit Logging)
+        notificationService.notifyResidentOfVisitor(saved, targetUser.orElse(null));
 
         return saved;
     }

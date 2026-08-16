@@ -181,6 +181,14 @@
             const event = JSON.parse(message.body);
             handleNotificationEvent(event);
           });
+          if (state.currentUser && state.currentUser.role === 'RESIDENT') {
+            const block = state.currentUser.blockNumber || 'A';
+            const flat = state.currentUser.flatNumber || '101';
+            state.stompClient.subscribe(`/topic/resident/${block}-${flat}`, message => {
+              const event = JSON.parse(message.body);
+              handleNotificationEvent(event);
+            });
+          }
         });
       }
     } catch (e) {}
@@ -910,11 +918,13 @@
     const userBlock = user && user.blockNumber ? String(user.blockNumber).trim() : '';
 
     const myVisitorRequests = state.visitorRequests.filter(r => {
-      if (!userFlat) return false;
-      const targetFlatStr = String(r.targetFlat || '').trim();
-      const targetBlockStr = String(r.targetBlock || '').trim();
-      const matchFlat = targetFlatStr === userFlat || targetFlatStr.endsWith(userFlat);
-      const matchBlock = !userBlock || !targetBlockStr || targetBlockStr === userBlock;
+      if (!userFlat && !userBlock) return false;
+      const targetFlatStr = String(r.targetFlat || '').trim().toLowerCase();
+      const targetBlockStr = String(r.targetBlock || '').trim().toLowerCase();
+      const uFlat = userFlat.toLowerCase().replace(/^[a-z]-?/i, '');
+      const tFlat = targetFlatStr.replace(/^[a-z]-?/i, '');
+      const matchFlat = tFlat === uFlat || targetFlatStr === userFlat.toLowerCase() || userFlat.toLowerCase().endsWith(targetFlatStr);
+      const matchBlock = !userBlock || !targetBlockStr || targetBlockStr === userBlock.toLowerCase();
       return matchFlat && matchBlock;
     });
 
@@ -1250,23 +1260,31 @@
   }
 
   function renderSettingsTab() {
+    const s = state.settings || { societyName: 'GateSync Society', autoExpireSec: 60 };
     return `
       <div class="card-box">
         <h2 class="card-title-text" style="margin-bottom:16px;">Society Configuration Settings</h2>
         <div class="form-grid">
           <div class="form-group">
             <label>Society Name</label>
-            <input type="text" class="form-control" placeholder="Enter Society Name" value="">
+            <input type="text" id="st-society-name" class="form-control" placeholder="Enter Society Name" value="${s.societyName || ''}">
           </div>
           <div class="form-group">
             <label>Auto-Expire Visitor Request (Seconds)</label>
-            <input type="number" class="form-control" placeholder="60" value="">
+            <input type="number" id="st-expire-sec" class="form-control" placeholder="60" value="${s.autoExpireSec || 60}">
           </div>
         </div>
-        <button class="btn btn-primary" onclick="showToast('Settings updated successfully!', 'success')">Save Configurations</button>
+        <button class="btn btn-primary" onclick="saveSocietySettings()">Save Configurations</button>
       </div>
     `;
   }
+
+  window.saveSocietySettings = function() {
+    const name = (document.getElementById('st-society-name').value || '').trim();
+    const expire = (document.getElementById('st-expire-sec').value || '60').trim();
+    state.settings = { societyName: name, autoExpireSec: parseInt(expire) || 60 };
+    showToast('Society configurations saved successfully!', 'success');
+  };
 
   function renderPasswordResetPage() {
     return `
@@ -1448,24 +1466,72 @@
       });
     }
 
+    const passwordResetForm = document.getElementById('password-reset-form');
+    if (passwordResetForm) {
+      passwordResetForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const newPass = (document.getElementById('reset-new').value || '').trim();
+        const confirmPass = (document.getElementById('reset-confirm').value || '').trim();
+        if (newPass !== confirmPass) {
+          showToast('Passwords do not match!', 'error');
+          return;
+        }
+        if (newPass.length < 6) {
+          showToast('Password must be at least 6 characters long!', 'error');
+          return;
+        }
+        if (state.currentUser) {
+          state.currentUser.password = newPass;
+          state.currentUser.mustResetPassword = false;
+          saveDatabaseUser(state.currentUser);
+          saveSession(state.currentUser, state.token);
+        }
+        state.activeView = state.currentUser ? state.currentUser.role.toLowerCase() : 'landing';
+        render();
+        showToast('Password updated successfully!', 'success');
+      });
+    }
+
     const guardForm = document.getElementById('guard-visitor-form');
     if (guardForm) {
-      guardForm.addEventListener('submit', (e) => {
+      guardForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const destVal = document.getElementById('vis-destination').value;
         const [flat, block] = destVal.split('|');
-        const newReq = {
-          id: Date.now(),
-          visitorName: document.getElementById('vis-name').value,
-          visitorPhone: document.getElementById('vis-phone').value,
-          purpose: document.getElementById('vis-purpose').value,
+        const name = (document.getElementById('vis-name').value || '').trim();
+        const phone = (document.getElementById('vis-phone').value || '').trim();
+        const purpose = document.getElementById('vis-purpose').value;
+        
+        const payload = {
+          visitorName: name,
+          visitorPhone: phone,
+          purpose: purpose,
           targetFlat: flat,
           targetBlock: block,
           photoUrl: state.selectedPhoto,
+          gateName: 'Main Gate A',
+          guardName: state.currentUser ? state.currentUser.fullName : 'On-Duty Guard'
+        };
+
+        let newReq = {
+          id: Date.now(),
+          ...payload,
           status: 'PENDING',
           timeAgo: 'Just now',
           createdAt: new Date().toISOString()
         };
+
+        try {
+          const resp = await fetch('/api/guard/visitor/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.id) newReq.id = data.id;
+          }
+        } catch (err) {}
 
         state.visitorRequests.unshift(newReq);
         showToast(`Approval request sent to Resident at Flat ${flat}!`, 'amber');
@@ -1648,10 +1714,17 @@
     lucide.createIcons();
   };
 
-  window.confirmApproveVisitor = function (requestId) {
+  window.confirmApproveVisitor = async function (requestId) {
     const item = state.visitorRequests.find(r => r.id === requestId);
     if (item) {
       item.status = 'APPROVED';
+      try {
+        await fetch('/api/resident/visitor/respond', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requestId, status: 'APPROVED' })
+        });
+      } catch (e) {}
       showToast(`Visitor ${item.visitorName} APPROVED! Guard notified to ALLOW ENTRY.`, 'success');
       playAlertSound();
     }
@@ -1677,7 +1750,7 @@
             </div>
             <div class="form-group">
               <label>Optional Reason for Guard</label>
-              <input type="text" class="form-control" placeholder="e.g. Expecting no delivery today">
+              <input type="text" id="deny-reason-input" class="form-control" placeholder="e.g. Expecting no delivery today">
             </div>
           </div>
           <div class="modal-footer">
@@ -1690,10 +1763,19 @@
     lucide.createIcons();
   };
 
-  window.confirmDenyVisitor = function (requestId) {
+  window.confirmDenyVisitor = async function (requestId) {
     const item = state.visitorRequests.find(r => r.id === requestId);
+    const reasonInput = document.getElementById('deny-reason-input');
+    const denialReason = reasonInput ? reasonInput.value.trim() : '';
     if (item) {
       item.status = 'DENIED';
+      try {
+        await fetch('/api/resident/visitor/respond', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requestId, status: 'DENIED', denialReason })
+        });
+      } catch (e) {}
       showToast(`Visitor ${item.visitorName} DENIED! Guard notified to INFORM DENIED.`, 'error');
     }
     closeModal();
@@ -1771,7 +1853,7 @@
             </div>
             <div class="form-group" style="margin-bottom:12px;">
               <label>Category</label>
-              <select class="form-control">
+              <select id="pr-category" class="form-control">
                 <option>Water issue</option>
                 <option>Power issue</option>
                 <option>Security issue</option>
@@ -1781,7 +1863,7 @@
             </div>
             <div class="form-group">
               <label>Description</label>
-              <textarea class="form-control" rows="3" placeholder="Describe the issue..."></textarea>
+              <textarea id="pr-desc" class="form-control" rows="3" placeholder="Describe the issue..."></textarea>
             </div>
           </div>
           <div class="modal-footer">
@@ -2175,11 +2257,11 @@
       }
 
       try {
-        const userId = state.currentUser ? state.currentUser.id : 3;
+        const username = state.currentUser ? (state.currentUser.loginId || state.currentUser.phone || 'resident') : 'resident';
         await fetch('/api/resident/change-password', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, currentPassword, newPassword })
+          body: JSON.stringify({ username, oldPassword: currentPassword, newPassword })
         });
       } catch (err) {}
 
@@ -2219,15 +2301,48 @@
     lucide.createIcons();
   };
 
-  window.sharePassCode = function (passCode) {
+  window.sharePassCode = async function (passCode) {
     const phoneInput = document.getElementById('pass-guest-phone');
     const phone = phoneInput ? phoneInput.value.trim() : '';
+    const user = state.currentUser || {};
+
+    const passReq = {
+      id: Date.now(),
+      visitorName: phone ? `Guest (${phone})` : 'Pre-Approved Guest',
+      visitorPhone: phone || 'N/A',
+      purpose: 'Pre-Approved Gate Pass (' + passCode + ')',
+      targetFlat: user.flatNumber || '101',
+      targetBlock: user.blockNumber || 'A',
+      photoUrl: PRESET_PHOTOS[1].url,
+      status: 'APPROVED',
+      inTime: 'Pre-Approved Pass',
+      createdAt: new Date().toISOString()
+    };
+
+    state.visitorRequests.unshift(passReq);
+
+    try {
+      await fetch('/api/resident/pass/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          guestName: passReq.visitorName,
+          guestPhone: phone,
+          category: 'GUEST',
+          residentFlat: (user.blockNumber || 'A') + '-' + (user.flatNumber || '101'),
+          residentName: user.fullName || 'Resident',
+          validHours: 24
+        })
+      });
+    } catch (e) {}
+
     closeModal();
     if (phone) {
       showToast(`Pass code ${passCode} copied & sent via SMS to ${phone}!`, 'success');
     } else {
-      showToast(`Pass code ${passCode} copied to clipboard!`, 'success');
+      showToast(`Pass code ${passCode} copied to clipboard & added to Guard Gate system!`, 'success');
     }
+    render();
   };
 
   window.openAddUserModal = function (type = 'RESIDENT') {
@@ -2500,6 +2615,8 @@
   };
 
   window.closeModal = function () {
-    document.getElementById('modal-container').innerHTML = '';
+    if (typeof closeCameraModal === 'function') closeCameraModal();
+    const m = document.getElementById('modal-container');
+    if (m) m.innerHTML = '';
   };
 })();
