@@ -524,10 +524,12 @@
           <header class="top-header">
             <div class="header-left-wrap">
               <button class="hamburger-btn" onclick="toggleMobileSidebar()"><i data-lucide="menu"></i></button>
-              <div class="header-search">
-                <i data-lucide="search"></i>
-                <input type="text" placeholder="Search residents, flats, or logs..." id="global-search-input" value="${state.searchQuery}">
-              </div>
+              ${role !== 'RESIDENT' ? `
+                <div class="header-search">
+                  <i data-lucide="search"></i>
+                  <input type="text" placeholder="Search residents, flats, or logs..." id="global-search-input" value="${state.searchQuery}">
+                </div>
+              ` : ''}
             </div>
 
             <div class="header-actions">
