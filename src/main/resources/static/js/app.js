@@ -163,10 +163,28 @@
       if (resResidents && Array.isArray(resResidents) && resResidents.length) {
         state.residents = resResidents.map(normalizeResident).filter(Boolean);
       }
-      render();
     } catch (e) {
       console.warn('API backend connecting, using local UI state fallback.');
     }
+
+    // Merge database users from local storage if state lists are missing entries
+    const dbUsers = getDatabaseUsers();
+    const dbResidents = dbUsers.filter(u => u.role === 'RESIDENT').map(normalizeResident).filter(Boolean);
+    const dbGuards = dbUsers.filter(u => u.role === 'GUARD');
+
+    dbResidents.forEach(dbr => {
+      if (!state.residents.some(r => r.loginId && r.loginId.toLowerCase() === dbr.loginId.toLowerCase())) {
+        state.residents.push(dbr);
+      }
+    });
+
+    dbGuards.forEach(dbg => {
+      if (!state.guards.some(g => g.loginId && g.loginId.toLowerCase() === dbg.loginId.toLowerCase())) {
+        state.guards.push(dbg);
+      }
+    });
+
+    render();
   }
 
   function connectWebSocket() {
@@ -1378,7 +1396,7 @@
           }
         } catch (err) {}
 
-        // 2. Check Database users stored in localStorage database
+        // 2. Check Database users stored in registered accounts database
         const dbUsers = getDatabaseUsers();
         const matched = dbUsers.find(u => 
           (u.loginId && u.loginId.toLowerCase() === loginId.toLowerCase()) || 
@@ -1389,7 +1407,13 @@
           if (matched.password && matched.password !== password) {
             state.isAuthenticating = false;
             render();
-            showToast(`Incorrect password for account "${matched.loginId}"!`, 'error');
+            showToast(`Incorrect password for ${selectedRole.toLowerCase()} account "${loginId}"!`, 'error');
+            return;
+          }
+          if (matched.role && matched.role !== selectedRole) {
+            state.isAuthenticating = false;
+            render();
+            showToast(`Account "${loginId}" is registered as ${matched.role}. Please click the "${matched.role}" tab above to sign in.`, 'error');
             return;
           }
           saveSession(matched, 'token_' + Date.now());
@@ -1400,9 +1424,10 @@
           return;
         }
 
-        // 3. Fallback quick login for new demo credentials
+        // 3. User not found in database! Access Denied for un-registered users.
         state.isAuthenticating = false;
-        quickLogin(loginId, password);
+        render();
+        showToast(`Access Denied! No registered ${selectedRole.toLowerCase()} account found for "${loginId}". Accounts must be created by Society Admin.`, 'error');
       });
     }
 
@@ -2527,6 +2552,21 @@
                 <label>Phone Number (+91)</label>
                 <input type="tel" id="ag-phone" class="form-control" placeholder="Enter Phone Number" required>
               </div>
+              <div class="form-grid" style="margin-bottom:12px;">
+                <div class="form-group">
+                  <label>Login Username / Guard ID</label>
+                  <input type="text" id="ag-login" class="form-control" placeholder="Enter Guard Username" required>
+                </div>
+                <div class="form-group">
+                  <label>Initial Password</label>
+                  <div style="position:relative;">
+                    <input type="password" id="ag-password" class="form-control" placeholder="Enter Password" value="123" required style="padding-right:42px;">
+                    <button type="button" onclick="togglePasswordVisibility('ag-password', this)" title="Show/Hide Password" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px; display:flex; align-items:center;">
+                      <i data-lucide="eye" style="width:18px; height:18px;"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
               <div class="form-grid">
                 <div class="form-group">
                   <label>Assigned Shift</label>
@@ -2559,16 +2599,18 @@
       e.preventDefault();
       const name = document.getElementById('ag-name').value;
       const phone = document.getElementById('ag-phone').value;
+      const loginIdInput = document.getElementById('ag-login') ? document.getElementById('ag-login').value.trim() : '';
+      const passInput = document.getElementById('ag-password') ? document.getElementById('ag-password').value : '123';
       const shift = document.getElementById('ag-shift').value;
       const gate = document.getElementById('ag-gate').value;
-      const guardLoginId = 'guard_' + name.toLowerCase().replace(/\s+/g, '');
+      const guardLoginId = loginIdInput || ('guard_' + name.toLowerCase().replace(/\s+/g, ''));
 
       const newGuard = {
         id: Date.now(),
         name,
         fullName: name,
         loginId: guardLoginId,
-        password: '123',
+        password: passInput || '123',
         phone,
         shift,
         gate,
@@ -2578,7 +2620,7 @@
       saveDatabaseUser(newGuard);
       state.guards.push(newGuard);
       closeModal();
-      showToast(`Guard ${name} saved to database! (Login ID: ${guardLoginId})`, 'success');
+      showToast(`Guard ${name} saved to database! (Login ID: ${guardLoginId}, Password: ${passInput})`, 'success');
       render();
     });
   };
