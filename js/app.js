@@ -50,36 +50,19 @@
   ];
 
   function getDatabaseUsers() {
-    let users = [];
     try {
       const stored = localStorage.getItem('gatesync_db_users');
-      if (stored) users = JSON.parse(stored);
+      if (stored) return JSON.parse(stored);
     } catch (e) {}
 
     const seed = [
       { id: 1, loginId: 'admin', password: '123', fullName: 'System Admin', role: 'ADMIN', phone: '9999999999' },
       { id: 2, loginId: 'resident', password: '123', fullName: 'Amit Patel', name: 'Amit Patel', role: 'RESIDENT', blockNumber: 'A', flatNumber: '101', flat: 'A-101', phone: '9876543210' },
-      { id: 3, loginId: 'priya', password: '123', fullName: 'Priya Sharma', name: 'Priya Sharma', role: 'RESIDENT', blockNumber: 'A', flatNumber: '102', flat: 'A-102', phone: '9876543211' },
-      { id: 4, loginId: 'rajesh', password: '123', fullName: 'Rajesh Kumar', name: 'Rajesh Kumar', role: 'RESIDENT', blockNumber: 'B', flatNumber: '201', flat: 'B-201', phone: '9876543212' },
-      { id: 5, loginId: 'sneha', password: '123', fullName: 'Sneha Gupta', name: 'Sneha Gupta', role: 'RESIDENT', blockNumber: 'B', flatNumber: '202', flat: 'B-202', phone: '9876543213' },
-      { id: 6, loginId: 'vikram', password: '123', fullName: 'Vikram Singh', name: 'Vikram Singh', role: 'RESIDENT', blockNumber: 'C', flatNumber: '301', flat: 'C-301', phone: '9876543214' },
-      { id: 7, loginId: 'ananya', password: '123', fullName: 'Ananya Verma', name: 'Ananya Verma', role: 'RESIDENT', blockNumber: 'C', flatNumber: '302', flat: 'C-302', phone: '9876543215' },
-      { id: 8, loginId: 'guard', password: '123', fullName: 'Bahadur Thapa', name: 'Bahadur Thapa', role: 'GUARD', phone: '9812345678', gate: 'Main Gate A', shift: 'DAY' },
-      { id: 9, loginId: 'ramesh_guard', password: '123', fullName: 'Ramesh Singh', name: 'Ramesh Singh', role: 'GUARD', phone: '9812345679', gate: 'North Service Gate B', shift: 'NIGHT' }
+      { id: 3, loginId: 'guard', password: '123', fullName: 'Bahadur Thapa', name: 'Bahadur Thapa', role: 'GUARD', phone: '9812345678', gate: 'Main Gate A', shift: 'DAY' }
     ];
 
-    let updated = false;
-    seed.forEach(s => {
-      if (!users.some(u => u.loginId && u.loginId.toLowerCase() === s.loginId.toLowerCase())) {
-        users.push(s);
-        updated = true;
-      }
-    });
-
-    if (updated || !localStorage.getItem('gatesync_db_users')) {
-      localStorage.setItem('gatesync_db_users', JSON.stringify(users));
-    }
-    return users;
+    localStorage.setItem('gatesync_db_users', JSON.stringify(seed));
+    return seed;
   }
 
   function saveDatabaseUser(userObj) {
@@ -1386,9 +1369,36 @@
           </div>
         </div>
         <button class="btn btn-primary" onclick="saveSocietySettings()">Save Configurations</button>
+        
+        <div style="margin-top:24px; border-top:1px solid var(--border-color); padding-top:20px;">
+          <h3 class="card-title-text" style="font-size:15px; color:#ef4444; margin-bottom:6px;">System Memory Purge & Reset</h3>
+          <p class="card-subtitle-text" style="margin-bottom:14px;">Clear all old local memory data and start fresh with a clean database.</p>
+          <button class="btn btn-secondary" style="border-color:#ef4444; color:#ef4444;" onclick="resetSystemMemory()"><i data-lucide="trash-2"></i> Reset Memory & Clean Slate</button>
+        </div>
       </div>
     `;
   }
+
+  window.resetSystemMemory = function () {
+    if (confirm('Are you sure you want to purge old local memory data and reset to a clean state?')) {
+      localStorage.removeItem('gatesync_db_users');
+      localStorage.removeItem('gatesync_visitor_requests');
+      localStorage.removeItem('gatesync_user');
+      localStorage.removeItem('gatesync_token');
+
+      state.visitorRequests = [];
+      state.residents = [];
+      state.guards = [];
+      state.currentUser = null;
+      state.token = null;
+      state.activeView = 'landing';
+
+      getDatabaseUsers();
+      fetchInitialData();
+      render();
+      showToast('Stale memory purged! System reset to clean state.', 'info');
+    }
+  };
 
   window.saveSocietySettings = function() {
     const name = (document.getElementById('st-society-name').value || '').trim();
