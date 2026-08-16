@@ -24,8 +24,9 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
 
     public LoginResponse authenticate(LoginRequest req) {
-        User user = userRepository.findByLoginId(req.getLoginId())
-                .or(() -> userMongoRepository.findByLoginId(req.getLoginId()))
+        String input = req.getLoginId();
+        User user = userRepository.findByLoginIdOrPhone(input, input)
+                .or(() -> userMongoRepository.findByLoginIdOrPhone(input, input))
                 .orElseThrow(() -> new RuntimeException("Invalid credentials"));
 
         if (!passwordEncoder.matches(req.getPassword(), user.getPassword())) {

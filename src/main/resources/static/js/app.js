@@ -1402,7 +1402,7 @@
         const dbUsers = getDatabaseUsers();
         const matched = dbUsers.find(u => 
           (u.loginId && u.loginId.toLowerCase() === loginId.toLowerCase()) || 
-          (u.phone && u.phone === loginId)
+          (u.phone && (u.phone === loginId || u.phone.replace(/[^0-9]/g,'') === loginId.replace(/[^0-9]/g,'')))
         );
 
         if (matched) {
@@ -1418,8 +1418,18 @@
             showToast(`Account "${loginId}" is registered as ${matched.role}. Please click the "${matched.role}" tab above to sign in.`, 'error');
             return;
           }
+
           saveSession(matched, 'token_' + Date.now());
           state.isAuthenticating = false;
+
+          // Check if first-time password reset is required for newly provisioned accounts
+          if (matched.mustResetPassword) {
+            state.activeView = 'password_reset';
+            render();
+            showToast(`First-time login detected for ${matched.fullName}! Please set your primary password below.`, 'amber');
+            return;
+          }
+
           state.activeView = matched.role ? matched.role.toLowerCase() : selectedRole.toLowerCase();
           render();
           showToast(`Welcome back, ${matched.fullName}!`, 'success');
@@ -2459,13 +2469,31 @@
         backupPhone: '',
         role: 'RESIDENT',
         status: 'Active',
+        mustResetPassword: true,
         avatarBg: 'blue'
       };
+
+      // Save to Backend Spring Boot & MongoDB Atlas
+      try {
+        fetch('/api/admin/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            loginId: newRes.loginId,
+            password: newRes.password,
+            fullName: newRes.name,
+            phone: newRes.phone,
+            role: 'RESIDENT',
+            blockNumber: block,
+            flatNumber: flatNum
+          })
+        });
+      } catch (e) {}
 
       saveDatabaseUser(newRes);
       state.residents.unshift(newRes);
       closeModal();
-      showToast(`Resident ${name} (Flat ${flatStr}) saved to database!`, 'success');
+      showToast(`Resident ${name} (Flat ${flatStr}) saved to DB & MongoDB! Login ID: "${loginId}" / Phone: "${phone}"`, 'success');
       render();
     });
   };
@@ -2616,13 +2644,31 @@
         phone,
         shift,
         gate,
-        role: 'GUARD'
+        role: 'GUARD',
+        mustResetPassword: true
       };
+
+      // Save to Backend Spring Boot & MongoDB Atlas
+      try {
+        fetch('/api/admin/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            loginId: newGuard.loginId,
+            password: newGuard.password,
+            fullName: newGuard.name,
+            phone: newGuard.phone,
+            role: 'GUARD',
+            shiftSchedule: shift,
+            gateAssigned: gate
+          })
+        });
+      } catch (e) {}
 
       saveDatabaseUser(newGuard);
       state.guards.push(newGuard);
       closeModal();
-      showToast(`Guard ${name} saved to database! (Login ID: ${guardLoginId}, Password: ${passInput})`, 'success');
+      showToast(`Guard ${name} saved to DB & MongoDB! Login ID: "${guardLoginId}" / Phone: "${phone}"`, 'success');
       render();
     });
   };
