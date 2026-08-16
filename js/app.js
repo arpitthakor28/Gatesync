@@ -75,6 +75,44 @@
     localStorage.setItem('gatesync_db_users', JSON.stringify(users));
   }
 
+  function getVisitorRequestsFromStorage() {
+    try {
+      const stored = localStorage.getItem('gatesync_visitor_requests');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {}
+    return [];
+  }
+
+  function saveVisitorRequestsToStorage() {
+    try {
+      localStorage.setItem('gatesync_visitor_requests', JSON.stringify(state.visitorRequests));
+      if (window.gatesyncChannel) {
+        window.gatesyncChannel.postMessage({ type: 'SYNC_VISITORS', requests: state.visitorRequests });
+      }
+    } catch (e) {}
+  }
+
+  if (typeof BroadcastChannel !== 'undefined') {
+    window.gatesyncChannel = new BroadcastChannel('gatesync_sync_channel');
+    window.gatesyncChannel.onmessage = (evt) => {
+      if (evt.data && evt.data.type === 'SYNC_VISITORS') {
+        state.visitorRequests = evt.data.requests || [];
+        render();
+      } else if (evt.data && evt.data.type === 'VISITOR_EVENT') {
+        handleNotificationEvent(evt.data.payload);
+      }
+    };
+  }
+
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'gatesync_visitor_requests' && e.newValue) {
+      try {
+        state.visitorRequests = JSON.parse(e.newValue);
+        render();
+      } catch (err) {}
+    }
+  });
+
   // App Initialization
   document.addEventListener('DOMContentLoaded', () => {
     loadSavedSession();
@@ -167,6 +205,16 @@
       console.warn('API backend connecting, using local UI state fallback.');
     }
 
+    // Merge visitor requests from local storage
+    const storedReqs = getVisitorRequestsFromStorage();
+    if (storedReqs && storedReqs.length > 0) {
+      storedReqs.forEach(sr => {
+        if (!state.visitorRequests.some(r => r.id === sr.id)) {
+          state.visitorRequests.push(sr);
+        }
+      });
+    }
+
     // Merge database users from local storage if state lists are missing entries
     const dbUsers = getDatabaseUsers();
     const dbResidents = dbUsers.filter(u => u.role === 'RESIDENT').map(normalizeResident).filter(Boolean);
@@ -213,14 +261,38 @@
   }
 
   function handleNotificationEvent(event) {
+    if (!event) return;
+
+    if (event.requestId) {
+      const existing = state.visitorRequests.find(r => r.id === event.requestId);
+      if (!existing && (event.type === 'VISITOR_NEW' || event.status === 'PENDING')) {
+        const newReq = {
+          id: event.requestId,
+          visitorName: event.visitorName,
+          visitorPhone: event.visitorPhone || 'N/A',
+          purpose: event.purpose,
+          targetFlat: event.targetFlat,
+          targetBlock: event.targetBlock,
+          photoUrl: event.photoUrl || PRESET_PHOTOS[0].url,
+          status: event.status || 'PENDING',
+          timeAgo: 'Just now',
+          createdAt: event.timestamp || new Date().toISOString()
+        };
+        state.visitorRequests.unshift(newReq);
+        saveVisitorRequestsToStorage();
+      } else if (existing && (event.type === 'VISITOR_UPDATE' || event.status)) {
+        existing.status = event.status;
+        saveVisitorRequestsToStorage();
+      }
+    }
+
     if (event.type === 'VISITOR_NEW') {
       showToast(`🔔 New Visitor Alert: ${event.visitorName} at Gate!`, 'amber');
       playAlertSound();
-      fetchInitialData().then(() => render());
     } else if (event.type === 'VISITOR_UPDATE') {
       showToast(`Visitor status updated to ${event.status} for ${event.visitorName}`, event.status === 'APPROVED' ? 'success' : 'error');
-      fetchInitialData().then(() => render());
     }
+    render();
   }
 
   function playAlertSound() {
@@ -1571,6 +1643,24 @@
         } catch (err) {}
 
         state.visitorRequests.unshift(newReq);
+        saveVisitorRequestsToStorage();
+        if (window.gatesyncChannel) {
+          window.gatesyncChannel.postMessage({
+            type: 'VISITOR_EVENT',
+            payload: {
+              type: 'VISITOR_NEW',
+              requestId: newReq.id,
+              visitorName: newReq.visitorName,
+              visitorPhone: newReq.visitorPhone,
+              purpose: newReq.purpose,
+              targetFlat: newReq.targetFlat,
+              targetBlock: newReq.targetBlock,
+              photoUrl: newReq.photoUrl,
+              status: newReq.status,
+              timestamp: newReq.createdAt
+            }
+          });
+        }
         showToast(`Approval request sent to Resident at Flat ${flat}!`, 'amber');
         playAlertSound();
         render();
@@ -1755,6 +1845,13 @@
     const item = state.visitorRequests.find(r => r.id === requestId);
     if (item) {
       item.status = 'APPROVED';
+      saveVisitorRequestsToStorage();
+      if (window.gatesyncChannel) {
+        window.gatesyncChannel.postMessage({
+          type: 'VISITOR_EVENT',
+          payload: { type: 'VISITOR_UPDATE', requestId: item.id, visitorName: item.visitorName, status: 'APPROVED' }
+        });
+      }
       try {
         await fetch('/api/resident/visitor/respond', {
           method: 'POST',
@@ -1806,6 +1903,13 @@
     const denialReason = reasonInput ? reasonInput.value.trim() : '';
     if (item) {
       item.status = 'DENIED';
+      saveVisitorRequestsToStorage();
+      if (window.gatesyncChannel) {
+        window.gatesyncChannel.postMessage({
+          type: 'VISITOR_EVENT',
+          payload: { type: 'VISITOR_UPDATE', requestId: item.id, visitorName: item.visitorName, status: 'DENIED' }
+        });
+      }
       try {
         await fetch('/api/resident/visitor/respond', {
           method: 'POST',
