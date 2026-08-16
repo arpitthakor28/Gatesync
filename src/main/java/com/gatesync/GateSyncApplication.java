@@ -2,14 +2,15 @@ package com.gatesync;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.data.mongodb.repository.config.EnableMongoRepositories;
-
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableScheduling
-@EnableJpaRepositories(basePackages = "com.gatesync.repository.jpa")
+@EntityScan(basePackages = {"com.gatesync.model", "com.gatesync.notification"})
+@EnableJpaRepositories(basePackages = {"com.gatesync.repository.jpa", "com.gatesync.notification"})
 @EnableMongoRepositories(basePackages = "com.gatesync.repository.mongo")
 public class GateSyncApplication {
 
