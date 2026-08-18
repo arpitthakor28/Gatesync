@@ -11,36 +11,39 @@ $staticDir = Join-Path $PSScriptRoot "src\main\resources\static"
 try {
     while ($listener.IsListening) {
         $context = $listener.GetContext()
-        $req = $context.Request
-        $res = $context.Response
+        try {
+            $req = $context.Request
+            $res = $context.Response
 
-        $path = $req.Url.LocalPath
-        if ($path -eq "/" -or $path -eq "") {
-            $path = "/index.html"
+            $path = $req.Url.LocalPath
+            if ($path -eq "/" -or $path -eq "") {
+                $path = "/index.html"
+            }
+
+            $fullPath = Join-Path $staticDir ($path.Replace('/', '\').TrimStart('\'))
+
+            [byte[]]$bytes = @()
+            if ($path -eq "/api/health") {
+                $json = '{"status":"OK","message":"Your API is running","timestamp":"' + (Get-Date -Format "o") + '"}'
+                $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+                $res.ContentType = "application/json; charset=utf-8"
+            } elseif (Test-Path $fullPath -PathType Leaf) {
+                $bytes = [System.IO.File]::ReadAllBytes($fullPath)
+                if ($fullPath.EndsWith(".html")) { $res.ContentType = "text/html; charset=utf-8" }
+                elseif ($fullPath.EndsWith(".css")) { $res.ContentType = "text/css" }
+                elseif ($fullPath.EndsWith(".js")) { $res.ContentType = "application/javascript" }
+                elseif ($fullPath.EndsWith(".json")) { $res.ContentType = "application/json" }
+            } else {
+                $res.StatusCode = 404
+                $bytes = [System.Text.Encoding]::UTF8.GetBytes("404 Not Found")
+            }
+            
+            $res.ContentLength64 = $bytes.Length
+            $res.OutputStream.Write($bytes, 0, $bytes.Length)
+            $res.OutputStream.Close()
+        } catch {
+            # Catch per-request exceptions so loop continues
         }
-
-        $fullPath = Join-Path $staticDir ($path.Replace('/', '\').TrimStart('\'))
-
-        $bytes = @()
-        if ($path -eq "/api/health") {
-            $json = '{"status":"OK","message":"Your API is running","timestamp":"' + (Get-Date -Format "o") + '"}'
-            $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
-            $res.ContentType = "application/json; charset=utf-8"
-        } elseif (Test-Path $fullPath -PathType Leaf) {
-            $bytes = [System.IO.File]::ReadAllBytes($fullPath)
-            if ($fullPath.EndsWith(".html")) { $res.ContentType = "text/html; charset=utf-8" }
-            elseif ($fullPath.EndsWith(".css")) { $res.ContentType = "text/css" }
-            elseif ($fullPath.EndsWith(".js")) { $res.ContentType = "application/javascript" }
-            elseif ($fullPath.EndsWith(".json")) { $res.ContentType = "application/json" }
-        } else {
-            $res.StatusCode = 404
-            $bytes = [System.Text.Encoding]::UTF8.GetBytes("404 Not Found")
-        }
-        
-        $res.ContentLength64 = $bytes.Length
-        $res.OutputStream.Write($bytes, 0, $bytes.Length)
-        $res.OutputStream.Close()
-        $res.Close()
     }
 } finally {
     $listener.Stop()

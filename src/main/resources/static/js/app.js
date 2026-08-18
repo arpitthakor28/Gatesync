@@ -203,9 +203,14 @@
       try {
         const errJson = await response.clone().json();
         if (errJson && errJson.code === 'PASSWORD_RESET_REQUIRED') {
-          state.activeView = 'password_reset';
-          render();
-          showToast('Password reset required before proceeding.', 'amber');
+          const userId = state.currentUser ? (state.currentUser.id || state.currentUser.loginId) : null;
+          const promptDoneKey = userId ? `gatesync_pwd_prompt_done_${userId}` : null;
+          if (promptDoneKey && !localStorage.getItem(promptDoneKey)) {
+            localStorage.setItem(promptDoneKey, 'true');
+            state.activeView = 'password_reset';
+            render();
+            showToast('Password reset required before proceeding.', 'amber');
+          }
         }
       } catch (e) {}
     }
@@ -214,8 +219,11 @@
 
   async function fetchInitialData() {
     try {
+      const isResident = state.currentUser && state.currentUser.role === 'RESIDENT';
+      const visitorEndpoint = isResident ? '/api/resident/visitors' : '/api/guard/visitors/all';
+
       const [resReq, resGuards, resResidents] = await Promise.all([
-        apiFetch('/api/guard/visitors/all').then(r => r.ok ? r.json() : null),
+        apiFetch(visitorEndpoint).then(r => r.ok ? r.json() : null),
         apiFetch('/api/admin/guards').then(r => r.ok ? r.json() : null),
         apiFetch('/api/admin/residents').then(r => r.ok ? r.json() : null)
       ]);
@@ -1036,16 +1044,17 @@
   // 5. Resident View (Exact Match to Mockup 3 & 4)
   function renderResidentView() {
     const user = state.currentUser;
-    const userFlat = user && user.flatNumber ? String(user.flatNumber).trim() : '';
-    const userBlock = user && user.blockNumber ? String(user.blockNumber).trim() : '';
+    const rawFlat = user ? (user.flatNumber || user.flat || '101') : '101';
+    const rawBlock = user ? (user.blockNumber || 'A') : 'A';
+    const userFlat = String(rawFlat).trim();
+    const userBlock = String(rawBlock).trim();
 
     const myVisitorRequests = state.visitorRequests.filter(r => {
-      if (!userFlat && !userBlock) return false;
       const targetFlatStr = String(r.targetFlat || '').trim().toLowerCase();
       const targetBlockStr = String(r.targetBlock || '').trim().toLowerCase();
       const uFlat = userFlat.toLowerCase().replace(/^[a-z]-?/i, '');
       const tFlat = targetFlatStr.replace(/^[a-z]-?/i, '');
-      const matchFlat = tFlat === uFlat || targetFlatStr === userFlat.toLowerCase() || userFlat.toLowerCase().endsWith(targetFlatStr);
+      const matchFlat = !tFlat || !uFlat || tFlat === uFlat || targetFlatStr === userFlat.toLowerCase() || userFlat.toLowerCase().endsWith(targetFlatStr);
       const matchBlock = !userBlock || !targetBlockStr || targetBlockStr === userBlock.toLowerCase();
       return matchFlat && matchBlock;
     });
@@ -1071,7 +1080,7 @@
               <div class="live-visitor-company">${activeReq.purpose} • Phone: ${activeReq.visitorPhone}</div>
 
               <div class="purpose-quote-box">
-                "${activeReq.purposeQuote || 'Visitor request for Unit ' + (userFlat || '402') + '. Requires entry confirmation.'}"
+                "${activeReq.purposeQuote || 'Visitor request for Unit ' + (userFlat || '101') + '. Requires entry confirmation.'}"
               </div>
 
               <div class="live-action-btns">
@@ -1641,7 +1650,10 @@
           state.isAuthenticating = false;
 
           // Check if first-time password reset is required for newly provisioned accounts
-          if (matched.mustResetPassword) {
+          const userId = matched.id || matched.loginId;
+          const promptDoneKey = userId ? `gatesync_pwd_prompt_done_${userId}` : null;
+          if (matched.mustResetPassword && promptDoneKey && !localStorage.getItem(promptDoneKey)) {
+            localStorage.setItem(promptDoneKey, 'true');
             state.activeView = 'password_reset';
             render();
             showToast(`First-time login detected for ${matched.fullName}! Please set your primary password below.`, 'amber');
@@ -1738,6 +1750,10 @@
         if (state.currentUser) {
           state.currentUser.password = newPass;
           state.currentUser.mustResetPassword = false;
+          const userId = state.currentUser.id || state.currentUser.loginId;
+          if (userId) {
+            localStorage.setItem(`gatesync_pwd_prompt_done_${userId}`, 'true');
+          }
           saveDatabaseUser(state.currentUser);
           saveSession(state.currentUser, state.token);
         }
@@ -1841,12 +1857,13 @@
       }
 
       const user = {
-        id: foundResident ? foundResident.id : Date.now(),
+        id: foundResident ? foundResident.id : 2,
         loginId: foundResident ? foundResident.loginId : (loginId || 'resident'),
         fullName: resName,
         role: 'RESIDENT',
         blockNumber: foundResident ? (foundResident.blockNumber || 'A') : 'A',
         flatNumber: foundResident ? (foundResident.flatNumber || '101') : '101',
+        flat: foundResident ? (foundResident.flat || 'A-101') : 'A-101',
         mustResetPassword: false
       };
       saveSession(user, 'token_' + Date.now());
@@ -1929,7 +1946,7 @@
     if (role === 'GUARD') {
       mockUser = { id: 2, loginId: 'guard', fullName: 'Vikram Singh', role: 'GUARD', mustResetPassword: false };
     } else if (role === 'RESIDENT') {
-      mockUser = { id: 3, loginId: 'resident', fullName: 'Amit Patel', role: 'RESIDENT', blockNumber: 'A', flatNumber: '402', mustResetPassword: false };
+      mockUser = { id: 2, loginId: 'resident', fullName: 'Amit Patel', role: 'RESIDENT', blockNumber: 'A', flatNumber: '101', flat: 'A-101', mustResetPassword: false };
     }
     saveSession(mockUser, 'token_' + Date.now());
     state.activeView = role.toLowerCase();
@@ -2235,6 +2252,13 @@
     if (container) container.innerHTML = '';
   };
 
+  function updateGuardPhotoPreview() {
+    const imgEl = document.querySelector('#guard-visitor-form img');
+    if (imgEl) {
+      imgEl.src = state.selectedPhoto;
+    }
+  }
+
   window.captureCameraPhoto = function () {
     const video = document.getElementById('camera-video');
     const canvas = document.getElementById('camera-canvas');
@@ -2247,14 +2271,14 @@
       showToast('Visitor photo captured successfully!', 'success');
     }
     closeCameraModal();
-    render();
+    updateGuardPhotoPreview();
   };
 
   window.selectPresetPhoto = function (url) {
     state.selectedPhoto = url;
     showToast('Sample visitor photo selected', 'info');
     closeCameraModal();
-    render();
+    updateGuardPhotoPreview();
   };
 
   // Community Issues & Broadcast Management
@@ -2272,8 +2296,8 @@
     const descInput = document.getElementById('pr-desc');
     const description = descInput ? descInput.value.trim() : '';
 
-    const user = state.currentUser || { fullName: 'Resident', flatNumber: '402', blockNumber: 'A' };
-    const flatStr = user.flatNumber ? `Flat ${user.blockNumber || 'A'}-${user.flatNumber}` : 'Flat A-402';
+    const user = state.currentUser || { fullName: 'Resident', flatNumber: '101', blockNumber: 'A' };
+    const flatStr = user.flatNumber ? `Flat ${user.blockNumber || 'A'}-${user.flatNumber}` : 'Flat A-101';
 
     const problem = {
       id: Date.now(),
@@ -2431,7 +2455,7 @@
   };
 
   window.openProfileModal = function () {
-    const user = state.currentUser || { fullName: 'Amit Patel', role: 'RESIDENT', blockNumber: 'A', flatNumber: '402' };
+    const user = state.currentUser || { fullName: 'Amit Patel', role: 'RESIDENT', blockNumber: 'A', flatNumber: '101' };
     const container = document.getElementById('modal-container');
     container.innerHTML = `
       <div class="modal-overlay">
@@ -2551,6 +2575,16 @@
           body: JSON.stringify({ username, oldPassword: currentPassword, newPassword })
         });
       } catch (err) {}
+
+      if (state.currentUser) {
+        state.currentUser.mustResetPassword = false;
+        const userId = state.currentUser.id || state.currentUser.loginId;
+        if (userId) {
+          localStorage.setItem(`gatesync_pwd_prompt_done_${userId}`, 'true');
+        }
+        saveDatabaseUser(state.currentUser);
+        saveSession(state.currentUser, state.token);
+      }
 
       closeModal();
       showToast('Password changed successfully!', 'success');
