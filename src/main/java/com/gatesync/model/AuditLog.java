@@ -19,6 +19,9 @@ public class AuditLog {
     @org.springframework.data.annotation.Id
     private Long id;
 
+    @Builder.Default
+    private String societyId = "SOC-101";
+
     private String actorName;
     private String actorRole;
     private String actionCategory; // VISITOR_ENTRY, APPROVAL, REGISTRATION, SECURITY

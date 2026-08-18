@@ -18,6 +18,9 @@ public class Flat {
     @org.springframework.data.annotation.Id
     private Long id;
 
+    @Builder.Default
+    private String societyId = "SOC-101";
+
     @Column(nullable = false)
     private String block;
 
@@ -26,6 +29,9 @@ public class Flat {
 
     private String ownerName;
     private String ownerPhone;
+
+    private String tenantName;
+    private String tenantPhone;
 
     @Builder.Default
     private boolean occupied = true;

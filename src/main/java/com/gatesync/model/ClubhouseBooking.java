@@ -19,6 +19,9 @@ public class ClubhouseBooking {
     @org.springframework.data.annotation.Id
     private Long id;
 
+    @Builder.Default
+    private String societyId = "SOC-101";
+
     private String residentName;
     private String flat;
     private String title;
@@ -29,7 +32,10 @@ public class ClubhouseBooking {
     private String endTime;
     private int guests;
     private String notes;
-    private String status; // PENDING, APPROVED, REJECTED, CANCELLED
+
+    @Builder.Default
+    private String status = "PENDING"; // PENDING, APPROVED, REJECTED, CANCELLED
+
     private String rejectionReason;
 
     private LocalDateTime createdAt;

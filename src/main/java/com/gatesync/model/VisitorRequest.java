@@ -19,6 +19,9 @@ public class VisitorRequest {
     @org.springframework.data.annotation.Id
     private Long id;
 
+    @Builder.Default
+    private String societyId = "SOC-101";
+
     @Column(nullable = false)
     private String visitorName;
 

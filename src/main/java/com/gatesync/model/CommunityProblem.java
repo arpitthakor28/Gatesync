@@ -19,6 +19,9 @@ public class CommunityProblem {
     @org.springframework.data.annotation.Id
     private Long id;
 
+    @Builder.Default
+    private String societyId = "SOC-101";
+
     private String reporterName;
     private String flat;
     private String title;
@@ -26,7 +29,10 @@ public class CommunityProblem {
     private String priority; // Low, Medium, High
     private String description;
     private String photoUrl;
-    private String status; // PENDING, APPROVED, HIDDEN, RESOLVED
+
+    @Builder.Default
+    private String status = "PENDING"; // PENDING, APPROVED, HIDDEN, RESOLVED
+
     private boolean pinned;
     private String adminReply;
 
