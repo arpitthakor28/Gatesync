@@ -41,10 +41,16 @@ public class User {
     private String gateAssigned; // For Guards
 
     @Builder.Default
+    private String societyId = "SOC-101";
+
+    @Builder.Default
     private boolean mustResetPassword = false;
 
     @Builder.Default
     private boolean active = true;
+
+    @Builder.Default
+    private boolean accountLocked = false;
 
     private LocalDateTime createdAt;
 
@@ -52,6 +58,9 @@ public class User {
     protected void onCreate() {
         if (createdAt == null) {
             createdAt = LocalDateTime.now();
+        }
+        if (societyId == null || societyId.isEmpty()) {
+            societyId = "SOC-101";
         }
     }
 }

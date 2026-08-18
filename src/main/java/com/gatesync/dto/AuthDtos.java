@@ -38,6 +38,7 @@ public class AuthDtos {
         private String loginId;
         private String fullName;
         private Role role;
+        private String societyId;
         private String blockNumber;
         private String flatNumber;
         private boolean mustResetPassword;

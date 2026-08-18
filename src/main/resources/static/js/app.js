@@ -190,12 +190,34 @@
     };
   }
 
+  async function apiFetch(url, options = {}) {
+    const headers = options.headers || {};
+    if (state.token) {
+      headers['Authorization'] = 'Bearer ' + state.token;
+    }
+    if (options.body && typeof options.body === 'string' && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
+    const response = await fetch(url, { ...options, headers });
+    if (response.status === 403) {
+      try {
+        const errJson = await response.clone().json();
+        if (errJson && errJson.code === 'PASSWORD_RESET_REQUIRED') {
+          state.activeView = 'password_reset';
+          render();
+          showToast('Password reset required before proceeding.', 'amber');
+        }
+      } catch (e) {}
+    }
+    return response;
+  }
+
   async function fetchInitialData() {
     try {
       const [resReq, resGuards, resResidents] = await Promise.all([
-        fetch('/api/guard/visitors/all').then(r => r.ok ? r.json() : null),
-        fetch('/api/admin/guards').then(r => r.ok ? r.json() : null),
-        fetch('/api/admin/residents').then(r => r.ok ? r.json() : null)
+        apiFetch('/api/guard/visitors/all').then(r => r.ok ? r.json() : null),
+        apiFetch('/api/admin/guards').then(r => r.ok ? r.json() : null),
+        apiFetch('/api/admin/residents').then(r => r.ok ? r.json() : null)
       ]);
 
       if (resReq && Array.isArray(resReq) && resReq.length) state.visitorRequests = resReq;
@@ -243,7 +265,13 @@
         const socket = new SockJS('/ws-gatesync');
         state.stompClient = Stomp.over(socket);
         state.stompClient.debug = null;
-        state.stompClient.connect({}, () => {
+
+        const connectHeaders = {};
+        if (state.token) {
+          connectHeaders['Authorization'] = 'Bearer ' + state.token;
+        }
+
+        state.stompClient.connect(connectHeaders, () => {
           console.log('Connected to GateSync WebSocket Broker.');
           state.stompClient.subscribe('/topic/guard/queue', message => {
             const event = JSON.parse(message.body);
@@ -1057,6 +1085,18 @@
             </div>
           </div>
         </div>
+
+        <!-- Mobile Sticky Thumb-Zone Action Bar -->
+        <div class="resident-thumb-container">
+          <div class="resident-thumb-btns">
+            <button class="btn-thumb-approve" onclick="openApproveModal(${activeReq.id})">
+              <i data-lucide="check-circle"></i> Approve (${activeReq.visitorName})
+            </button>
+            <button class="btn-thumb-deny" onclick="openDenyModal(${activeReq.id})">
+              <i data-lucide="x-circle"></i> Deny
+            </button>
+          </div>
+        </div>
       ` : `
         <div class="card-box" style="margin-bottom:24px; text-align:center; padding:24px;">
           <div style="font-size:24px; margin-bottom:6px;">🏡</div>
@@ -1205,7 +1245,7 @@
           <button class="btn btn-primary btn-sm" onclick="openRegisterVisitorModal()"><i data-lucide="plus"></i> New Gate Entry</button>
         </div>
 
-        <div class="custom-table-container">
+        <div class="desktop-table-view custom-table-container">
           <table class="clean-table">
             <thead>
               <tr>
@@ -1245,6 +1285,31 @@
             </tbody>
           </table>
         </div>
+
+        <div class="mobile-cards-container">
+          ${state.visitorRequests.length === 0 ? `
+            <div style="text-align:center; color:var(--text-muted); padding:24px;">No visitor logs recorded yet.</div>
+          ` : state.visitorRequests.map(r => `
+            <div class="responsive-card">
+              <div class="responsive-card-header">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <img src="${r.photoUrl}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
+                  <span>${r.visitorName}</span>
+                </div>
+                <span class="status-pill ${r.status === 'APPROVED' ? 'active' : r.status === 'DENIED' ? 'denied' : 'inactive'}">${r.status}</span>
+              </div>
+              <div class="responsive-card-body">
+                <div><div class="responsive-card-label">Destination</div><div class="responsive-card-value">Flat ${r.targetBlock}-${r.targetFlat}</div></div>
+                <div><div class="responsive-card-label">In Time</div><div class="responsive-card-value">${r.inTime || '14:20 PM'}</div></div>
+                <div><div class="responsive-card-label">Phone</div><div class="responsive-card-value">${r.visitorPhone}</div></div>
+                <div><div class="responsive-card-label">Purpose</div><div class="responsive-card-value">${r.purpose || 'Guest'}</div></div>
+              </div>
+              <div class="responsive-card-actions">
+                <button class="btn btn-secondary btn-sm" onclick="openVisitorDetailModal(${r.id})"><i data-lucide="eye"></i> Details</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
       </div>
     `;
   }
@@ -1260,7 +1325,7 @@
           <button class="btn btn-primary" onclick="openAddUserModal('RESIDENT')"><i data-lucide="plus"></i> Add Resident</button>
         </div>
 
-        <div class="custom-table-container">
+        <div class="desktop-table-view custom-table-container">
           <table class="clean-table">
             <thead>
               <tr>
@@ -1294,6 +1359,28 @@
             </tbody>
           </table>
         </div>
+
+        <div class="mobile-cards-container">
+          ${state.residents.length === 0 ? `
+            <div style="text-align:center; color:var(--text-muted); padding:24px;">No residents in directory yet.</div>
+          ` : state.residents.map(r => `
+            <div class="responsive-card">
+              <div class="responsive-card-header">
+                <span>${r.name}</span>
+                <span class="status-pill active">${r.status}</span>
+              </div>
+              <div class="responsive-card-body">
+                <div><div class="responsive-card-label">Flat</div><div class="responsive-card-value">${r.flat}</div></div>
+                <div><div class="responsive-card-label">Phone</div><div class="responsive-card-value">${r.phone}</div></div>
+                <div><div class="responsive-card-label">Backup</div><div class="responsive-card-value">${r.backupPhone || 'N/A'}</div></div>
+                <div><div class="responsive-card-label">Login ID</div><div class="responsive-card-value">${r.loginId || 'N/A'}</div></div>
+              </div>
+              <div class="responsive-card-actions">
+                <button class="btn btn-secondary btn-sm" onclick="openEditResidentModal(${r.id})">Edit</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
       </div>
     `;
   }
@@ -1317,7 +1404,7 @@
           </div>
         </div>
 
-        <div class="custom-table-container">
+        <div class="desktop-table-view custom-table-container">
           <table class="clean-table">
             <thead>
               <tr>
@@ -1348,6 +1435,26 @@
               `).join('')}
             </tbody>
           </table>
+        </div>
+
+        <div class="mobile-cards-container">
+          ${filteredGuards.length === 0 ? `
+            <div style="text-align:center; color:var(--text-muted); padding:24px;">No security guards in roster yet.</div>
+          ` : filteredGuards.map(g => `
+            <div class="responsive-card">
+              <div class="responsive-card-header">
+                <span>${g.name}</span>
+                <span class="status-pill ${g.shift === 'DAY' ? 'active' : 'checked-in'}">${g.shift} SHIFT</span>
+              </div>
+              <div class="responsive-card-body">
+                <div><div class="responsive-card-label">Gate Station</div><div class="responsive-card-value">${g.gate}</div></div>
+                <div><div class="responsive-card-label">Phone</div><div class="responsive-card-value">${g.phone}</div></div>
+              </div>
+              <div class="responsive-card-actions">
+                <button class="btn btn-secondary btn-sm" onclick="showToast('Editing ${g.name}', 'info')">Edit</button>
+              </div>
+            </div>
+          `).join('')}
         </div>
       </div>
     `;

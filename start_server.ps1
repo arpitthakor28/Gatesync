@@ -1,5 +1,6 @@
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://localhost:8080/")
+$listener.Prefixes.Add("http://127.0.0.1:8080/")
 $listener.Start()
 Write-Host "======================================================="
 Write-Host " GateSync Web Server is LIVE at: http://localhost:8080/"
@@ -20,26 +21,25 @@ try {
 
         $fullPath = Join-Path $staticDir ($path.Replace('/', '\').TrimStart('\'))
 
+        $bytes = @()
         if ($path -eq "/api/health") {
             $json = '{"status":"OK","message":"Your API is running","timestamp":"' + (Get-Date -Format "o") + '"}'
             $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
             $res.ContentType = "application/json; charset=utf-8"
-            $res.ContentLength64 = $bytes.Length
-            $res.StatusCode = 200
-            $res.OutputStream.Write($bytes, 0, $bytes.Length)
         } elseif (Test-Path $fullPath -PathType Leaf) {
             $bytes = [System.IO.File]::ReadAllBytes($fullPath)
             if ($fullPath.EndsWith(".html")) { $res.ContentType = "text/html; charset=utf-8" }
             elseif ($fullPath.EndsWith(".css")) { $res.ContentType = "text/css" }
             elseif ($fullPath.EndsWith(".js")) { $res.ContentType = "application/javascript" }
-            
-            $res.ContentLength64 = $bytes.Length
-            $res.OutputStream.Write($bytes, 0, $bytes.Length)
+            elseif ($fullPath.EndsWith(".json")) { $res.ContentType = "application/json" }
         } else {
             $res.StatusCode = 404
-            $msg = [System.Text.Encoding]::UTF8.GetBytes("404 Not Found")
-            $res.OutputStream.Write($msg, 0, $msg.Length)
+            $bytes = [System.Text.Encoding]::UTF8.GetBytes("404 Not Found")
         }
+        
+        $res.ContentLength64 = $bytes.Length
+        $res.OutputStream.Write($bytes, 0, $bytes.Length)
+        $res.OutputStream.Close()
         $res.Close()
     }
 } finally {
