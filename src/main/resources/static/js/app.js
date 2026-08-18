@@ -2694,7 +2694,7 @@
     `;
     lucide.createIcons();
 
-    document.getElementById('add-user-modal-form').addEventListener('submit', (e) => {
+    document.getElementById('add-user-modal-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const name = document.getElementById('au-name').value;
       const block = document.getElementById('au-block').value;
@@ -2719,15 +2719,14 @@
         backupPhone: '',
         role: 'RESIDENT',
         status: 'Active',
-        mustResetPassword: true,
+        mustResetPassword: false,
         avatarBg: 'blue'
       };
 
-      // Save to Backend Spring Boot & MongoDB Atlas
+      // Save to Backend Spring Boot & MongoDB Atlas with Authorization token
       try {
-        fetch('/api/admin/users', {
+        const resp = await apiFetch('/api/admin/users', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             loginId: newRes.loginId,
             password: newRes.password,
@@ -2738,12 +2737,16 @@
             flatNumber: flatNum
           })
         });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data && data.id) newRes.id = data.id;
+        }
       } catch (e) {}
 
       saveDatabaseUser(newRes);
       state.residents.unshift(newRes);
       closeModal();
-      showToast(`Resident ${name} (Flat ${flatStr}) saved to DB & MongoDB! Login ID: "${loginId}" / Phone: "${phone}"`, 'success');
+      showToast(`Resident ${name} (Flat ${flatStr}) saved to DB & MongoDB! Login ID: "${loginId}" / Password: "${passVal || '123'}"`, 'success');
       render();
     });
   };
@@ -2875,7 +2878,7 @@
     `;
     lucide.createIcons();
 
-    document.getElementById('add-guard-form').addEventListener('submit', (e) => {
+    document.getElementById('add-guard-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const name = document.getElementById('ag-name').value;
       const phone = document.getElementById('ag-phone').value;
@@ -2895,14 +2898,13 @@
         shift,
         gate,
         role: 'GUARD',
-        mustResetPassword: true
+        mustResetPassword: false
       };
 
-      // Save to Backend Spring Boot & MongoDB Atlas
+      // Save to Backend Spring Boot & MongoDB Atlas with Authorization token
       try {
-        fetch('/api/admin/users', {
+        const resp = await apiFetch('/api/admin/users', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             loginId: newGuard.loginId,
             password: newGuard.password,
@@ -2913,12 +2915,16 @@
             gateAssigned: gate
           })
         });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data && data.id) newGuard.id = data.id;
+        }
       } catch (e) {}
 
       saveDatabaseUser(newGuard);
       state.guards.push(newGuard);
       closeModal();
-      showToast(`Guard ${name} saved to DB & MongoDB! Login ID: "${guardLoginId}" / Phone: "${phone}"`, 'success');
+      showToast(`Guard ${name} saved to DB & MongoDB! Login ID: "${guardLoginId}" / Password: "${passInput || '123'}"`, 'success');
       render();
     });
   };
