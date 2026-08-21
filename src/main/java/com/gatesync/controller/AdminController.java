@@ -94,4 +94,10 @@ public class AdminController {
         communityProblemService.deleteProblem(id);
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/clear-all-data")
+    public ResponseEntity<com.gatesync.dto.AuthDtos.ApiResponse> clearAllData() {
+        adminService.clearAllData();
+        return ResponseEntity.ok(new com.gatesync.dto.AuthDtos.ApiResponse(true, "All database records and MongoDB Atlas collections cleared successfully."));
+    }
 }

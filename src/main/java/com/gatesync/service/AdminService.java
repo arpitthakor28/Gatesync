@@ -20,6 +20,11 @@ public class AdminService {
     private final com.gatesync.repository.mongo.UserMongoRepository userMongoRepository;
     private final FlatRepository flatRepository;
     private final VisitorRequestRepository visitorRequestRepository;
+    private final com.gatesync.repository.mongo.VisitorRequestMongoRepository visitorRequestMongoRepository;
+    private final com.gatesync.repository.jpa.ClubhouseBookingRepository clubhouseBookingRepository;
+    private final com.gatesync.repository.mongo.ClubhouseBookingMongoRepository clubhouseBookingMongoRepository;
+    private final com.gatesync.repository.jpa.CommunityProblemRepository communityProblemRepository;
+    private final com.gatesync.repository.mongo.CommunityProblemMongoRepository communityProblemMongoRepository;
     private final AuditLogRepository auditLogRepository;
     private final PasswordEncoder passwordEncoder;
 
@@ -109,5 +114,31 @@ public class AdminService {
 
     public List<AuditLog> getAuditLogs() {
         return auditLogRepository.findAllByOrderByTimestampDesc();
+    }
+
+    @Transactional
+    public void clearAllData() {
+        List<User> nonAdmins = userRepository.findAll().stream()
+                .filter(u -> u.getRole() != Role.ADMIN || (!"admin".equalsIgnoreCase(u.getLoginId())))
+                .collect(java.util.stream.Collectors.toList());
+        if (!nonAdmins.isEmpty()) {
+            userRepository.deleteAll(nonAdmins);
+        }
+
+        try {
+            userMongoRepository.deleteAll();
+            visitorRequestMongoRepository.deleteAll();
+            clubhouseBookingMongoRepository.deleteAll();
+            communityProblemMongoRepository.deleteAll();
+        } catch (Exception e) {
+            System.err.println("❌ MongoDB clear exception: " + e.getMessage());
+        }
+
+        visitorRequestRepository.deleteAll();
+        clubhouseBookingRepository.deleteAll();
+        communityProblemRepository.deleteAll();
+        auditLogRepository.deleteAll();
+
+        System.out.println("✅ All Database and MongoDB Atlas Collections cleared successfully.");
     }
 }

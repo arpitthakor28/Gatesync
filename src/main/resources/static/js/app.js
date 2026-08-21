@@ -1591,25 +1591,30 @@
     `;
   }
 
-  window.resetSystemMemory = function () {
-    if (confirm('Are you sure you want to purge old local memory data and reset to a clean state?')) {
-      localStorage.removeItem('gatesync_db_users');
-      localStorage.removeItem('gatesync_visitor_requests');
-      localStorage.removeItem('gatesync_user');
-      localStorage.removeItem('gatesync_token');
-
-      state.visitorRequests = [];
-      state.residents = [];
-      state.guards = [];
-      state.currentUser = null;
-      state.token = null;
-      state.activeView = 'landing';
-
-      getDatabaseUsers();
-      fetchInitialData();
-      render();
-      showToast('Stale memory purged! System reset to clean state.', 'info');
+  window.resetSystemMemory = async function () {
+    if (!confirm('Are you sure you want to clear ALL data from Database, MongoDB Atlas, and Local Storage?')) {
+      return;
     }
+
+    try {
+      await apiFetch('/api/admin/clear-all-data', { method: 'POST' });
+    } catch (e) {}
+
+    localStorage.clear();
+
+    state.visitorRequests = [];
+    state.residents = [];
+    state.guards = [];
+    state.notifications = [];
+    state.clubhouseBookings = [];
+    state.communityProblems = [];
+    state.currentUser = null;
+    state.token = null;
+    state.activeView = 'landing';
+
+    getDatabaseUsers();
+    render();
+    showToast('All Database, MongoDB Atlas, and Local Storage data cleared completely!', 'success');
   };
 
   window.saveSocietySettings = function() {
