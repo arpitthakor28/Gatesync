@@ -111,7 +111,10 @@ public class AuthService {
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             try {
                 userMongoRepository.save(saved);
-            } catch (Exception ignored) {}
+                System.out.println("✅ [MongoDB Compass] Saved Admin user: " + saved.getLoginId());
+            } catch (Exception e) {
+                System.err.println("❌ [MongoDB Compass Error] " + e.getMessage());
+            }
         });
 
         String jwtToken = tokenProvider.generateToken(saved);

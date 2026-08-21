@@ -29,9 +29,14 @@ public class CommunityProblemService {
         }
 
         CommunityProblem saved = communityProblemRepository.save(problem);
-        try {
-            communityProblemMongoRepository.save(problem);
-        } catch (Exception e) {}
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                communityProblemMongoRepository.save(saved);
+                System.out.println("✅ [MongoDB Compass] Saved community problem: " + saved.getTitle());
+            } catch (Exception e) {
+                System.err.println("❌ [MongoDB Compass Error] " + e.getMessage());
+            }
+        });
 
         auditLogRepository.save(AuditLog.builder()
                 .actorName(saved.getReporterName() != null ? saved.getReporterName() : "Resident")

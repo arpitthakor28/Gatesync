@@ -19,6 +19,7 @@ import java.util.UUID;
 public class VisitorService {
 
     private final VisitorRequestRepository visitorRequestRepository;
+    private final com.gatesync.repository.mongo.VisitorRequestMongoRepository visitorRequestMongoRepository;
     private final PreApprovedPassRepository preApprovedPassRepository;
     private final AuditLogRepository auditLogRepository;
     private final UserRepository userRepository;
@@ -41,6 +42,15 @@ public class VisitorService {
                 .build();
 
         VisitorRequest saved = visitorRequestRepository.save(request);
+
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                visitorRequestMongoRepository.save(saved);
+                System.out.println("✅ [MongoDB Compass] Saved visitor entry: " + saved.getVisitorName());
+            } catch (Exception e) {
+                System.err.println("❌ [MongoDB Compass Error] " + e.getMessage());
+            }
+        });
 
         // Audit Log
         auditLogRepository.save(AuditLog.builder()

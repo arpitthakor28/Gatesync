@@ -79,7 +79,10 @@ public class AdminService {
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             try {
                 userMongoRepository.save(saved);
-            } catch (Exception ignored) {}
+                System.out.println("✅ [MongoDB Compass] Saved " + saved.getRole() + " user: " + saved.getLoginId());
+            } catch (Exception e) {
+                System.err.println("❌ [MongoDB Compass Error] " + e.getMessage());
+            }
         });
 
         java.util.concurrent.CompletableFuture.runAsync(() -> {

@@ -15,6 +15,7 @@ import java.util.List;
 public class ClubhouseService {
 
     private final ClubhouseBookingRepository clubhouseBookingRepository;
+    private final com.gatesync.repository.mongo.ClubhouseBookingMongoRepository clubhouseBookingMongoRepository;
     private final AuditLogRepository auditLogRepository;
 
     @Transactional
@@ -27,6 +28,15 @@ public class ClubhouseService {
         }
 
         ClubhouseBooking saved = clubhouseBookingRepository.save(booking);
+
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                clubhouseBookingMongoRepository.save(saved);
+                System.out.println("✅ [MongoDB Compass] Saved clubhouse booking: " + saved.getTitle());
+            } catch (Exception e) {
+                System.err.println("❌ [MongoDB Compass Error] " + e.getMessage());
+            }
+        });
 
         auditLogRepository.save(AuditLog.builder()
                 .actorName(saved.getResidentName() != null ? saved.getResidentName() : "Resident")
