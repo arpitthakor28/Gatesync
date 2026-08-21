@@ -195,7 +195,7 @@
       } else if (r.blockNumber) {
         flatStr = r.blockNumber;
       } else {
-        flatStr = 'A-101';
+        flatStr = '';
       }
     }
     
@@ -1143,12 +1143,15 @@
     const userBlock = String(rawBlock).trim();
 
     const myVisitorRequests = state.visitorRequests.filter(r => {
-      const targetFlatStr = String(r.targetFlat || '').trim().toLowerCase();
+      if (!user) return false;
+      const targetFlatStr = String(r.targetFlat || '').trim().toLowerCase().replace(/^[a-z]-?/i, '');
+      const userFlatStr = String(user.flatNumber || user.flat || '').trim().toLowerCase().replace(/^[a-z]-?/i, '');
       const targetBlockStr = String(r.targetBlock || '').trim().toLowerCase();
-      const uFlat = userFlat.toLowerCase().replace(/^[a-z]-?/i, '');
-      const tFlat = targetFlatStr.replace(/^[a-z]-?/i, '');
-      const matchFlat = !tFlat || !uFlat || tFlat === uFlat || targetFlatStr === userFlat.toLowerCase() || userFlat.toLowerCase().endsWith(targetFlatStr);
-      const matchBlock = !userBlock || !targetBlockStr || targetBlockStr === userBlock.toLowerCase();
+      const userBlockStr = String(user.blockNumber || '').trim().toLowerCase();
+
+      if (!userFlatStr || !targetFlatStr) return false;
+      const matchFlat = (targetFlatStr === userFlatStr);
+      const matchBlock = !userBlockStr || !targetBlockStr || (userBlockStr === targetBlockStr);
       return matchFlat && matchBlock;
     });
 
