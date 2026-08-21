@@ -23,6 +23,8 @@ import java.util.List;
 public class AdminController {
 
     private final AdminService adminService;
+    private final com.gatesync.service.ClubhouseService clubhouseService;
+    private final com.gatesync.service.CommunityProblemService communityProblemService;
 
     @GetMapping("/stats")
     public ResponseEntity<DashboardStats> getStats(@AuthenticationPrincipal CustomUserPrincipal principal) {
@@ -54,5 +56,42 @@ public class AdminController {
     @GetMapping("/audit-logs")
     public ResponseEntity<List<AuditLog>> getAuditLogs(@AuthenticationPrincipal CustomUserPrincipal principal) {
         return ResponseEntity.ok(adminService.getAuditLogs());
+    }
+
+    @GetMapping("/clubhouse/bookings")
+    public ResponseEntity<List<com.gatesync.model.ClubhouseBooking>> getAllClubhouseBookings(
+            @AuthenticationPrincipal CustomUserPrincipal principal) {
+        return ResponseEntity.ok(clubhouseService.getAllBookings("SOC-101"));
+    }
+
+    @PostMapping("/clubhouse/bookings/{id}/status")
+    public ResponseEntity<com.gatesync.model.ClubhouseBooking> updateClubhouseStatus(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @PathVariable Long id,
+            @RequestParam String status,
+            @RequestParam(required = false) String reason) {
+        return ResponseEntity.ok(clubhouseService.updateBookingStatus(id, status, reason));
+    }
+
+    @GetMapping("/problems")
+    public ResponseEntity<List<com.gatesync.model.CommunityProblem>> getAllProblems(
+            @AuthenticationPrincipal CustomUserPrincipal principal) {
+        return ResponseEntity.ok(communityProblemService.getAllProblems("SOC-101"));
+    }
+
+    @PostMapping("/problems/{id}/resolve")
+    public ResponseEntity<com.gatesync.model.CommunityProblem> resolveProblem(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @PathVariable Long id,
+            @RequestParam(required = false) String reply) {
+        return ResponseEntity.ok(communityProblemService.resolveProblem(id, reply));
+    }
+
+    @DeleteMapping("/problems/{id}")
+    public ResponseEntity<Void> deleteProblem(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @PathVariable Long id) {
+        communityProblemService.deleteProblem(id);
+        return ResponseEntity.noContent().build();
     }
 }

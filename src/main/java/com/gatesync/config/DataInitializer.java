@@ -52,7 +52,8 @@ public class DataInitializer implements CommandLineRunner {
             flatRepository.save(f);
         }
 
-        // 3. Essential Seed Accounts ONLY (Admin, Guard, Resident)
+        // 2. Essential Seed Account ONLY (System Admin)
+        // Testing residents and guards removed so Resident and Guard counts start at zero.
         User admin = User.builder()
                 .loginId("admin")
                 .password(passwordEncoder.encode("123"))
@@ -67,45 +68,13 @@ public class DataInitializer implements CommandLineRunner {
                 .build();
         userRepository.save(admin);
 
-        User guard = User.builder()
-                .loginId("guard")
-                .password(passwordEncoder.encode("123"))
-                .fullName("Bahadur Thapa")
-                .email("guard@gatesync.in")
-                .phone("9812345678")
-                .role(Role.GUARD)
-                .societyId(societyId)
-                .gateAssigned("Main Gate A")
-                .shiftSchedule("DAY")
-                .mustResetPassword(false)
-                .active(true)
-                .accountLocked(false)
-                .build();
-        userRepository.save(guard);
-
-        User resident = User.builder()
-                .loginId("resident")
-                .password(passwordEncoder.encode("123"))
-                .fullName("Amit Patel")
-                .email("resident@gatesync.in")
-                .phone("9876543210")
-                .role(Role.RESIDENT)
-                .societyId(societyId)
-                .blockNumber("A")
-                .flatNumber("101")
-                .mustResetPassword(false)
-                .active(true)
-                .accountLocked(false)
-                .build();
-        userRepository.save(resident);
-
-        // 4. Initial Audit Log
+        // 3. Initial Audit Log
         AuditLog log = AuditLog.builder()
                 .societyId(societyId)
                 .actorName("System Admin")
                 .actorRole("ADMIN")
                 .actionCategory("SECURITY")
-                .description("GateSync Society Database Initialized with essential accounts.")
+                .description("GateSync Society Database Initialized with System Admin account. Resident and Guard counts starting at zero.")
                 .timestamp(LocalDateTime.now())
                 .build();
         auditLogRepository.save(log);

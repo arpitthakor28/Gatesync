@@ -24,10 +24,30 @@ public class AuthService {
     private final JwtTokenProvider tokenProvider;
 
     public LoginResponse authenticate(LoginRequest req) {
-        String input = req.getLoginId();
-        User user = userRepository.findByLoginIdOrPhone(input, input)
-                .or(() -> userMongoRepository.findByLoginIdOrPhone(input, input))
-                .orElseThrow(() -> new RuntimeException("Invalid credentials"));
+        String input = (req.getLoginId() != null ? req.getLoginId() : "").trim();
+        String cleanPhone = input.replaceAll("[^0-9]", "");
+        User user = userRepository.findByLoginId(input)
+                .or(() -> userRepository.findByPhone(input))
+                .or(() -> cleanPhone.length() >= 7 ? userRepository.findByPhone(cleanPhone) : java.util.Optional.empty())
+                .or(() -> userRepository.findByLoginIdOrPhone(input, input))
+                .or(() -> {
+                    if (input.contains("-")) {
+                        String[] parts = input.split("-");
+                        return userRepository.findByBlockNumberAndFlatNumber(parts[0].trim(), parts[1].trim());
+                    }
+                    return userRepository.findByBlockNumberAndFlatNumber("A", input);
+                })
+                .orElseGet(() -> {
+                    try {
+                        return userMongoRepository.findByLoginIdOrPhone(input, input).orElse(null);
+                    } catch (Exception e) {
+                        return null;
+                    }
+                });
+
+        if (user == null) {
+            throw new RuntimeException("Invalid credentials");
+        }
 
         if (!passwordEncoder.matches(req.getPassword(), user.getPassword())) {
             throw new RuntimeException("Invalid credentials");
@@ -43,12 +63,16 @@ public class AuthService {
 
         String jwtToken = tokenProvider.generateToken(user);
 
-        auditLogRepository.save(AuditLog.builder()
-                .actorName(user.getFullName())
-                .actorRole(user.getRole().name())
-                .actionCategory("SECURITY")
-                .description("User logged in successfully via ID: " + user.getLoginId())
-                .build());
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                auditLogRepository.save(AuditLog.builder()
+                        .actorName(user.getFullName())
+                        .actorRole(user.getRole().name())
+                        .actionCategory("SECURITY")
+                        .description("User logged in successfully via ID: " + user.getLoginId())
+                        .build());
+            } catch (Exception ignored) {}
+        });
 
         return LoginResponse.builder()
                 .token(jwtToken)
@@ -65,7 +89,7 @@ public class AuthService {
 
     @Transactional
     public LoginResponse registerAdmin(RegisterAdminRequest req) {
-        if (userRepository.findByLoginId(req.getLoginId()).isPresent() || userMongoRepository.findByLoginId(req.getLoginId()).isPresent()) {
+        if (userRepository.findByLoginId(req.getLoginId()).isPresent()) {
             throw new RuntimeException("Login ID already registered!");
         }
 
@@ -83,18 +107,25 @@ public class AuthService {
                 .build();
 
         User saved = userRepository.save(admin);
-        try {
-            userMongoRepository.save(admin);
-        } catch (Exception e) {}
+
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                userMongoRepository.save(saved);
+            } catch (Exception ignored) {}
+        });
 
         String jwtToken = tokenProvider.generateToken(saved);
 
-        auditLogRepository.save(AuditLog.builder()
-                .actorName(saved.getFullName())
-                .actorRole("ADMIN")
-                .actionCategory("SECURITY")
-                .description("New Admin account registered: " + saved.getLoginId())
-                .build());
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                auditLogRepository.save(AuditLog.builder()
+                        .actorName(saved.getFullName())
+                        .actorRole("ADMIN")
+                        .actionCategory("SECURITY")
+                        .description("New Admin account registered: " + saved.getLoginId())
+                        .build());
+            } catch (Exception ignored) {}
+        });
 
         return LoginResponse.builder()
                 .token(jwtToken)

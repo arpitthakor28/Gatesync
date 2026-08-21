@@ -14,6 +14,7 @@
     authRole: 'RESIDENT',
     authMode: 'LOGIN',
     searchQuery: '',
+    searchDropdownOpen: false,
     residentStatusFilter: 'ALL',
     guardShiftFilter: 'ALL',
     isAuthenticating: false,
@@ -55,10 +56,10 @@
       if (stored) return JSON.parse(stored);
     } catch (e) {}
 
+    // Clean initialization: Only seed default Admin account.
+    // Testing Resident and Guard accounts are removed so Resident & Guard counts start at zero (0).
     const seed = [
-      { id: 1, loginId: 'admin', password: '123', fullName: 'System Admin', role: 'ADMIN', phone: '9999999999' },
-      { id: 2, loginId: 'resident', password: '123', fullName: 'Amit Patel', name: 'Amit Patel', role: 'RESIDENT', blockNumber: 'A', flatNumber: '101', flat: 'A-101', phone: '9876543210' },
-      { id: 3, loginId: 'guard', password: '123', fullName: 'Bahadur Thapa', name: 'Bahadur Thapa', role: 'GUARD', phone: '9812345678', gate: 'Main Gate A', shift: 'DAY' }
+      { id: 1, loginId: 'admin', password: '123', fullName: 'System Admin', role: 'ADMIN', phone: '9999999999' }
     ];
 
     localStorage.setItem('gatesync_db_users', JSON.stringify(seed));
@@ -222,10 +223,12 @@
       const isResident = state.currentUser && state.currentUser.role === 'RESIDENT';
       const visitorEndpoint = isResident ? '/api/resident/visitors' : '/api/guard/visitors/all';
 
-      const [resReq, resGuards, resResidents] = await Promise.all([
+      const [resReq, resGuards, resResidents, resProblems, resClubhouse] = await Promise.all([
         apiFetch(visitorEndpoint).then(r => r.ok ? r.json() : null),
         apiFetch('/api/admin/guards').then(r => r.ok ? r.json() : null),
-        apiFetch('/api/admin/residents').then(r => r.ok ? r.json() : null)
+        apiFetch('/api/admin/residents').then(r => r.ok ? r.json() : null),
+        apiFetch('/api/resident/problems/all').then(r => r.ok ? r.json() : null),
+        apiFetch('/api/resident/clubhouse/my-bookings').then(r => r.ok ? r.json() : null)
       ]);
 
       if (resReq && Array.isArray(resReq) && resReq.length) state.visitorRequests = resReq;
@@ -233,6 +236,8 @@
       if (resResidents && Array.isArray(resResidents) && resResidents.length) {
         state.residents = resResidents.map(normalizeResident).filter(Boolean);
       }
+      if (resProblems && Array.isArray(resProblems) && resProblems.length) state.communityProblems = resProblems;
+      if (resClubhouse && Array.isArray(resClubhouse) && resClubhouse.length) state.clubhouseBookings = resClubhouse;
     } catch (e) {
       console.warn('API backend connecting, using local UI state fallback.');
     }
@@ -531,6 +536,51 @@
     `;
   }
 
+  window.selectSearchSuggestion = function(name, flat) {
+    state.searchQuery = flat || name;
+    state.searchDropdownOpen = false;
+    render();
+  };
+
+  function renderSearchDropdown() {
+    const query = (state.searchQuery || '').trim().toLowerCase();
+    if (!query || !state.searchDropdownOpen) return '';
+
+    const matches = state.residents.filter(r => {
+      const nameMatch = r.name && r.name.toLowerCase().includes(query);
+      const flatMatch = r.flat && r.flat.toLowerCase().includes(query);
+      const phoneMatch = r.phone && r.phone.toLowerCase().includes(query);
+      const loginMatch = r.loginId && r.loginId.toLowerCase().includes(query);
+      return nameMatch || flatMatch || phoneMatch || loginMatch;
+    }).slice(0, 6);
+
+    return `
+      <div class="search-dropdown-overlay" style="position:absolute; top:calc(100% + 6px); left:0; right:0; min-width:320px; background:white; border:1px solid #cbd5e1; border-radius:10px; box-shadow:0 12px 28px rgba(0,0,0,0.18); z-index:999; overflow:hidden; padding:6px 0;">
+        <div style="padding:6px 12px; font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; border-bottom:1px solid #f1f5f9;">
+          Resident Suggestions (${matches.length})
+        </div>
+        <div style="max-height:260px; overflow-y:auto;">
+          ${matches.length === 0 ? `
+            <div style="padding:16px; text-align:center; font-size:12px; color:var(--text-muted);">
+              No residents found matching "<strong>${state.searchQuery}</strong>"
+            </div>
+          ` : matches.map(r => `
+            <div class="search-suggestion-item" onclick="selectSearchSuggestion('${(r.name || '').replace(/'/g, "\\'")}', '${r.flat}')" style="padding:10px 14px; display:flex; align-items:center; justify-content:space-between; cursor:pointer; transition:background 0.15s ease; border-bottom:1px solid #f8fafc;" onmouseenter="this.style.background='#f1f5f9'" onmouseleave="this.style.background='transparent'">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <div class="avatar-badge-circle ${r.avatarBg || 'blue'}" style="width:32px; height:32px; font-size:11px;">${r.initials || 'RS'}</div>
+                <div>
+                  <div style="font-weight:600; font-size:13px; color:#0f172a;">${r.name}</div>
+                  <div style="font-size:11px; color:var(--text-muted);">Flat: <strong style="color:#2563eb;">${r.flat}</strong> • Phone: ${r.phone || 'N/A'}</div>
+                </div>
+              </div>
+              <span class="status-pill ${r.status === 'Active' ? 'active' : 'inactive'}" style="font-size:10px; padding:2px 8px;">${r.status}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
   // 2. Global Dashboard Layout Wrapper
   function renderDashboardLayout() {
     const user = state.currentUser || { fullName: 'Rajesh Sharma', role: 'ADMIN' };
@@ -635,9 +685,10 @@
             <div class="header-left-wrap">
               <button class="hamburger-btn" onclick="toggleMobileSidebar()"><i data-lucide="menu"></i></button>
               ${role !== 'RESIDENT' ? `
-                <div class="header-search">
+                <div class="header-search" style="position:relative;">
                   <i data-lucide="search"></i>
-                  <input type="text" placeholder="Search residents, flats, or logs..." id="global-search-input" value="${state.searchQuery}">
+                  <input type="text" placeholder="Search residents, flats, or logs..." id="global-search-input" value="${state.searchQuery}" autocomplete="off">
+                  ${renderSearchDropdown()}
                 </div>
               ` : ''}
             </div>
@@ -1566,10 +1617,39 @@
     const searchInput = document.getElementById('global-search-input');
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
-        state.searchQuery = e.target.value;
+        const val = e.target.value;
+        const pos = e.target.selectionStart;
+        state.searchQuery = val;
+        state.searchDropdownOpen = val.trim().length > 0;
         render();
+
+        const newSearchInput = document.getElementById('global-search-input');
+        if (newSearchInput) {
+          newSearchInput.focus();
+          try {
+            newSearchInput.setSelectionRange(pos, pos);
+          } catch (err) {}
+        }
+      });
+
+      searchInput.addEventListener('focus', () => {
+        if (state.searchQuery && state.searchQuery.trim().length > 0) {
+          state.searchDropdownOpen = true;
+          render();
+          const newSearchInput = document.getElementById('global-search-input');
+          if (newSearchInput) newSearchInput.focus();
+        }
       });
     }
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.header-search')) {
+        if (state.searchDropdownOpen) {
+          state.searchDropdownOpen = false;
+          render();
+        }
+      }
+    });
 
     const loginForm = document.getElementById('login-form');
     if (loginForm) {
@@ -1587,13 +1667,19 @@
         state.isAuthenticating = true;
         render();
 
-        // 1. Try Spring Boot Backend Authentication endpoint first
+        // 1. Try Spring Boot Backend Authentication endpoint first (with fast 3s timeout)
         try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3000);
+
           const resp = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ loginId, password })
+            body: JSON.stringify({ loginId, password }),
+            signal: controller.signal
           });
+          clearTimeout(timeoutId);
+
           if (resp.ok) {
             const data = await resp.json();
             const user = {
@@ -1617,7 +1703,7 @@
 
         // 2. Check Database users stored in registered accounts database
         const dbUsers = getDatabaseUsers();
-        const cleanInput = loginId.toLowerCase().replace(/\s+/g, '');
+        const cleanInput = loginId.toLowerCase().trim().replace(/\s+/g, '');
         const inputPhone = loginId.replace(/[^0-9]/g, '');
         const inputFlat = cleanInput.replace(/[^a-z0-9]/g, '');
 
@@ -1625,15 +1711,16 @@
           const uRole = (u.role || '').toUpperCase();
           if (uRole !== selectedRole) return false;
 
-          const uLogin = (u.loginId || '').toLowerCase().replace(/\s+/g, '');
+          const uLogin = (u.loginId || '').toLowerCase().trim().replace(/\s+/g, '');
           const uPhone = (u.phone || '').replace(/[^0-9]/g, '');
-          const uName = (u.fullName || u.name || '').toLowerCase().replace(/\s+/g, '');
+          const uName = (u.fullName || u.name || '').toLowerCase().trim();
           const uFlatStr = (u.flat || (u.blockNumber && u.flatNumber ? u.blockNumber + '-' + u.flatNumber : u.flatNumber) || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          const uFlatNum = (u.flatNumber || '').toLowerCase().trim();
 
-          const matchLogin = uLogin && uLogin === cleanInput;
-          const matchPhone = inputPhone.length >= 7 && uPhone.includes(inputPhone);
-          const matchName = uName && (uName === cleanInput || uName.includes(cleanInput));
-          const matchFlat = uFlatStr && (uFlatStr === inputFlat || uFlatStr.endsWith(inputFlat) || inputFlat.endsWith(uFlatStr));
+          const matchLogin = uLogin && (uLogin === cleanInput || uLogin === loginId.toLowerCase().trim());
+          const matchPhone = inputPhone.length >= 5 && uPhone.endsWith(inputPhone);
+          const matchName = uName && uName.includes(loginId.toLowerCase().trim());
+          const matchFlat = (uFlatStr && (uFlatStr === inputFlat || uFlatStr.endsWith(inputFlat))) || (uFlatNum && uFlatNum === inputFlat);
 
           return matchLogin || matchPhone || matchName || matchFlat;
         });
@@ -1713,18 +1800,35 @@
           mustResetPassword: false
         };
 
-        // Try backend registration endpoint
+        // Fast backend registration with 3s timeout
         try {
-          await fetch('/api/auth/register-admin', {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+          const resp = await fetch('/api/auth/register-admin', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fullName, societyName, loginId, phone, password })
+            body: JSON.stringify({ fullName, societyName, loginId, phone, password }),
+            signal: controller.signal
           });
+          clearTimeout(timeoutId);
+
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data.userId) newAdmin.id = data.userId;
+            if (data.token) newAdmin.token = data.token;
+          }
         } catch (err) {}
 
-        // Save into local user database
+        // Reset state for new resident site: Remove testing residents and guards (set to 0 count)
+        state.residents = [];
+        state.guards = [];
+        state.visitorRequests = [];
+        localStorage.removeItem('gatesync_visitor_requests');
+
+        // Save into local user database and session
         saveDatabaseUser(newAdmin);
-        saveSession(newAdmin, 'token_' + Date.now());
+        saveSession(newAdmin, newAdmin.token || ('token_' + Date.now()));
 
         state.isAuthenticating = false;
         state.activeView = 'admin';

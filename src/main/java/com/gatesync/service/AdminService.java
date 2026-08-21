@@ -69,20 +69,29 @@ public class AdminService {
                 .flatNumber(req.getFlatNumber())
                 .shiftSchedule(req.getShiftSchedule())
                 .gateAssigned(req.getGateAssigned())
-                .mustResetPassword(true)
+                .mustResetPassword(false)
+                .active(true)
+                .accountLocked(false)
                 .build();
 
         User saved = userRepository.save(user);
-        try {
-            userMongoRepository.save(user);
-        } catch (Exception e) {}
 
-        auditLogRepository.save(AuditLog.builder()
-                .actorName("Admin System")
-                .actorRole("ADMIN")
-                .actionCategory("USER_MGMT")
-                .description("Created new " + role.name() + " account in DB & MongoDB Atlas: " + saved.getFullName() + " (" + saved.getLoginId() + ")")
-                .build());
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                userMongoRepository.save(saved);
+            } catch (Exception ignored) {}
+        });
+
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                auditLogRepository.save(AuditLog.builder()
+                        .actorName("Admin System")
+                        .actorRole("ADMIN")
+                        .actionCategory("USER_MGMT")
+                        .description("Created new " + role.name() + " account in DB & MongoDB Atlas: " + saved.getFullName() + " (" + saved.getLoginId() + ")")
+                        .build());
+            } catch (Exception ignored) {}
+        });
 
         return saved;
     }

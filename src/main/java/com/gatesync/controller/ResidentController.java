@@ -24,6 +24,8 @@ public class ResidentController {
 
     private final VisitorService visitorService;
     private final AuthService authService;
+    private final com.gatesync.service.ClubhouseService clubhouseService;
+    private final com.gatesync.service.CommunityProblemService communityProblemService;
 
     @GetMapping("/visitors")
     public ResponseEntity<List<VisitorRequest>> getFlatVisitors(
@@ -69,6 +71,49 @@ public class ResidentController {
 
         String effectiveFlat = (flat != null && !flat.isEmpty()) ? flat : (principal != null ? (principal.getBlockNumber() + "-" + principal.getFlatNumber()) : "A-101");
         return ResponseEntity.ok(visitorService.getPassesForFlat(effectiveFlat));
+    }
+
+    @PostMapping("/clubhouse/book")
+    public ResponseEntity<com.gatesync.model.ClubhouseBooking> createClubhouseBooking(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @RequestBody com.gatesync.model.ClubhouseBooking booking) {
+
+        if (principal != null && (booking.getResidentName() == null || booking.getResidentName().isEmpty())) {
+            booking.setResidentName(principal.getUsername());
+            booking.setFlat(principal.getBlockNumber() + "-" + principal.getFlatNumber());
+        }
+        return ResponseEntity.ok(clubhouseService.createBooking(booking));
+    }
+
+    @GetMapping("/clubhouse/my-bookings")
+    public ResponseEntity<List<com.gatesync.model.ClubhouseBooking>> getMyClubhouseBookings(
+            @AuthenticationPrincipal CustomUserPrincipal principal) {
+
+        String residentName = (principal != null && principal.getUsername() != null) ? principal.getUsername() : "Resident";
+        return ResponseEntity.ok(clubhouseService.getBookingsForResident(residentName));
+    }
+
+    @PostMapping("/problems/report")
+    public ResponseEntity<com.gatesync.model.CommunityProblem> reportCommunityProblem(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @RequestBody com.gatesync.model.CommunityProblem problem) {
+
+        if (principal != null) {
+            if (problem.getReporterName() == null || problem.getReporterName().isEmpty()) {
+                problem.setReporterName(principal.getUsername());
+            }
+            if (problem.getFlat() == null || problem.getFlat().isEmpty()) {
+                problem.setFlat(principal.getBlockNumber() + "-" + principal.getFlatNumber());
+            }
+        }
+        return ResponseEntity.ok(communityProblemService.reportProblem(problem));
+    }
+
+    @GetMapping("/problems/all")
+    public ResponseEntity<List<com.gatesync.model.CommunityProblem>> getAllCommunityProblems(
+            @AuthenticationPrincipal CustomUserPrincipal principal) {
+
+        return ResponseEntity.ok(communityProblemService.getAllProblems("SOC-101"));
     }
 
     @PostMapping("/change-password")
