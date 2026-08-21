@@ -114,8 +114,27 @@
   window.addEventListener('storage', (e) => {
     if (e.key === 'gatesync_visitor_requests' && e.newValue) {
       try {
-        state.visitorRequests = JSON.parse(e.newValue);
-        render();
+        const oldReqs = state.visitorRequests || [];
+        const newReqs = JSON.parse(e.newValue) || [];
+        state.visitorRequests = newReqs;
+
+        // Check if a new pending visitor entry was submitted by Guard
+        const newlyAdded = newReqs.find(nr => !oldReqs.some(or => or.id === nr.id) && nr.status === 'PENDING');
+        if (newlyAdded) {
+          handleNotificationEvent({
+            type: 'VISITOR_NEW',
+            requestId: newlyAdded.id,
+            visitorName: newlyAdded.visitorName,
+            visitorPhone: newlyAdded.visitorPhone,
+            purpose: newlyAdded.purpose,
+            targetFlat: newlyAdded.targetFlat,
+            targetBlock: newlyAdded.targetBlock,
+            photoUrl: newlyAdded.photoUrl,
+            status: 'PENDING'
+          });
+        } else {
+          render();
+        }
       } catch (err) {}
     }
   });
@@ -130,22 +149,19 @@
 
   function loadSavedSession() {
     const savedUser = localStorage.getItem('gatesync_user');
-    const savedToken = localStorage.getItem('gatesync_token');
-    if (savedUser && savedToken) {
+    const savedToken = localStorage.getItem('gatesync_token') || 'token_pwa_session';
+    if (savedUser) {
       try {
-        state.currentUser = JSON.parse(savedUser);
-        state.token = savedToken;
-        if (state.currentUser && state.currentUser.role) {
-          state.activeView = state.currentUser.role.toLowerCase();
-        } else {
-          state.activeView = 'landing';
+        const user = JSON.parse(savedUser);
+        if (user && user.role) {
+          state.currentUser = user;
+          state.token = savedToken;
+          state.activeView = user.role.toLowerCase();
+          return;
         }
-      } catch (e) {
-        state.activeView = 'landing';
-      }
-    } else {
-      state.activeView = 'landing';
+      } catch (e) {}
     }
+    state.activeView = 'landing';
   }
 
   function saveSession(user, token) {
@@ -343,23 +359,19 @@
       }
     }
 
-    if (event.type === 'VISITOR_NEW') {
-      showToast(`🔔 New Visitor Alert: ${event.visitorName} at Gate!`, 'amber');
+    if (event.type === 'VISITOR_NEW' || event.status === 'PENDING') {
+      showToast(`🔔 ALERT: New Visitor ${event.visitorName || ''} at Gate!`, 'amber');
       playAlertSound();
 
-      // Instantly show approval popup modal on Resident tab if flat matches
-      if (state.currentUser && state.currentUser.role === 'RESIDENT') {
-        const resBlock = (state.currentUser.blockNumber || 'A').toUpperCase();
-        const resFlat = (state.currentUser.flatNumber || '101').toUpperCase();
-        const targetBlock = (event.targetBlock || 'A').toUpperCase();
-        const targetFlat = (event.targetFlat || '101').toUpperCase();
-
-        if (resFlat === targetFlat || targetFlat.endsWith(resFlat) || resFlat.endsWith(targetFlat)) {
+      // Automatically open live approval modal for logged-in resident
+      if (state.currentUser && (state.currentUser.role === 'RESIDENT' || state.activeView === 'resident')) {
+        const reqId = event.requestId || (state.visitorRequests.length ? state.visitorRequests[0].id : null);
+        if (reqId) {
           setTimeout(() => {
             if (typeof window.openApproveModal === 'function') {
-              window.openApproveModal(event.requestId);
+              window.openApproveModal(reqId);
             }
-          }, 200);
+          }, 150);
         }
       }
     } else if (event.type === 'VISITOR_UPDATE') {
