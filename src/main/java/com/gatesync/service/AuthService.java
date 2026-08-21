@@ -140,19 +140,40 @@ public class AuthService {
 
     @Transactional
     public ApiResponse resetPassword(PasswordResetRequest req) {
-        User user = userRepository.findById(req.getUserId())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = null;
+        if (req.getUserId() != null) {
+            user = userRepository.findById(req.getUserId()).orElse(null);
+        }
+        if (user == null && req.getUsername() != null && !req.getUsername().trim().isEmpty()) {
+            String uname = req.getUsername().trim();
+            user = userRepository.findByLoginId(uname)
+                    .or(() -> userRepository.findByPhone(uname))
+                    .orElse(null);
+        }
+        if (user == null) {
+            throw new RuntimeException("User not found for password reset");
+        }
 
         user.setPassword(passwordEncoder.encode(req.getNewPassword()));
         user.setMustResetPassword(false);
         userRepository.save(user);
 
-        auditLogRepository.save(AuditLog.builder()
-                .actorName(user.getFullName())
-                .actorRole(user.getRole().name())
-                .actionCategory("SECURITY")
-                .description("Password successfully updated and strength verified.")
-                .build());
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                userMongoRepository.save(user);
+            } catch (Exception ignored) {}
+        });
+
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                auditLogRepository.save(AuditLog.builder()
+                        .actorName(user.getFullName())
+                        .actorRole(user.getRole() != null ? user.getRole().name() : "USER")
+                        .actionCategory("SECURITY")
+                        .description("Password successfully updated and verified for: " + user.getLoginId())
+                        .build());
+            } catch (Exception ignored) {}
+        });
 
         return new ApiResponse(true, "Password updated successfully!");
     }

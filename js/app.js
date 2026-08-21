@@ -67,9 +67,13 @@
   }
 
   function saveDatabaseUser(userObj) {
-    if (!userObj || !userObj.loginId) return;
+    if (!userObj || (!userObj.loginId && !userObj.phone && !userObj.id)) return;
     const users = getDatabaseUsers();
-    const idx = users.findIndex(u => u.loginId && u.loginId.toLowerCase() === userObj.loginId.toLowerCase());
+    const idx = users.findIndex(u => 
+      (u.loginId && userObj.loginId && u.loginId.toLowerCase() === userObj.loginId.toLowerCase()) ||
+      (u.phone && userObj.phone && u.phone === userObj.phone) ||
+      (u.id && userObj.id && u.id === userObj.id)
+    );
     if (idx >= 0) {
       users[idx] = { ...users[idx], ...userObj };
     } else {
@@ -125,12 +129,22 @@
   });
 
   function loadSavedSession() {
-    state.activeView = 'landing'; // Always start on Login form on project open
     const savedUser = localStorage.getItem('gatesync_user');
     const savedToken = localStorage.getItem('gatesync_token');
     if (savedUser && savedToken) {
-      state.currentUser = JSON.parse(savedUser);
-      state.token = savedToken;
+      try {
+        state.currentUser = JSON.parse(savedUser);
+        state.token = savedToken;
+        if (state.currentUser && state.currentUser.role) {
+          state.activeView = state.currentUser.role.toLowerCase();
+        } else {
+          state.activeView = 'landing';
+        }
+      } catch (e) {
+        state.activeView = 'landing';
+      }
+    } else {
+      state.activeView = 'landing';
     }
   }
 
@@ -332,6 +346,22 @@
     if (event.type === 'VISITOR_NEW') {
       showToast(`🔔 New Visitor Alert: ${event.visitorName} at Gate!`, 'amber');
       playAlertSound();
+
+      // Instantly show approval popup modal on Resident tab if flat matches
+      if (state.currentUser && state.currentUser.role === 'RESIDENT') {
+        const resBlock = (state.currentUser.blockNumber || 'A').toUpperCase();
+        const resFlat = (state.currentUser.flatNumber || '101').toUpperCase();
+        const targetBlock = (event.targetBlock || 'A').toUpperCase();
+        const targetFlat = (event.targetFlat || '101').toUpperCase();
+
+        if (resFlat === targetFlat || targetFlat.endsWith(resFlat) || resFlat.endsWith(targetFlat)) {
+          setTimeout(() => {
+            if (typeof window.openApproveModal === 'function') {
+              window.openApproveModal(event.requestId);
+            }
+          }, 200);
+        }
+      }
     } else if (event.type === 'VISITOR_UPDATE') {
       showToast(`Visitor status updated to ${event.status} for ${event.visitorName}`, event.status === 'APPROVED' ? 'success' : 'error');
     }
@@ -1929,6 +1959,7 @@
         }
         showToast(`Approval request sent to Resident at Flat ${flat}!`, 'amber');
         playAlertSound();
+        state.selectedPhoto = PRESET_PHOTOS[0].url;
         render();
       });
     }
@@ -2681,12 +2712,13 @@
       } catch (err) {}
 
       if (state.currentUser) {
+        state.currentUser.password = newPassword;
         state.currentUser.mustResetPassword = false;
         const userId = state.currentUser.id || state.currentUser.loginId;
         if (userId) {
           localStorage.setItem(`gatesync_pwd_prompt_done_${userId}`, 'true');
         }
-        saveDatabaseUser(state.currentUser);
+        saveDatabaseUser({ ...state.currentUser, password: newPassword });
         saveSession(state.currentUser, state.token);
       }
 
