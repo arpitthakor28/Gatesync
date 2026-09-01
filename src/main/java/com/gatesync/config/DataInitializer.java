@@ -2,6 +2,7 @@ package com.gatesync.config;
 
 import com.gatesync.model.*;
 import com.gatesync.repository.jpa.*;
+import com.gatesync.repository.mongo.UserMongoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -9,16 +10,24 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 
+/**
+ * The admin seed account is written to Mongo (via UserMongoRepository) since that is
+ * now the sole source of truth for User records - see AuthService/AdminService.
+ * Checking/seeding against the JPA UserRepository here would seed an account that
+ * AuthService can never find, and would re-seed on every restart since H2's count()
+ * always resets to 0.
+ */
 @Component
 @RequiredArgsConstructor
 public class DataInitializer implements CommandLineRunner {
 
     private final SocietyRepository societyRepository;
-    private final UserRepository userRepository;
+    private final UserMongoRepository userRepository;
     private final FlatRepository flatRepository;
     private final VisitorRequestRepository visitorRequestRepository;
     private final PreApprovedPassRepository preApprovedPassRepository;
     private final AuditLogRepository auditLogRepository;
+    private final MongoSequenceService sequenceService;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -55,6 +64,7 @@ public class DataInitializer implements CommandLineRunner {
         // 2. Essential Seed Account ONLY (System Admin)
         // Testing residents and guards removed so Resident and Guard counts start at zero.
         User admin = User.builder()
+                .id(sequenceService.nextId("users"))
                 .loginId("admin")
                 .password(passwordEncoder.encode("123"))
                 .fullName("System Admin")

@@ -1,31 +1,44 @@
 package com.gatesync.service;
 
+import com.gatesync.config.MongoSequenceService;
 import com.gatesync.dto.AdminDtos.*;
 import com.gatesync.model.*;
 import com.gatesync.repository.jpa.*;
+import com.gatesync.repository.mongo.UserMongoRepository;
+import com.gatesync.repository.mongo.VisitorRequestMongoRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * User and VisitorRequest reads/writes are Mongo-only - see AuthService for why
+ * (H2 is in-memory and gets wiped on every Render cold start after idle spin-down).
+ * This is what caused resident/guard accounts created via createUser() to silently
+ * disappear.
+ *
+ * Flat, ClubhouseBooking, CommunityProblem, and AuditLog are intentionally still on
+ * H2/JPA for now (out of scope for this fix) - they carry the same latent dual-
+ * persistence bug and should get the same treatment, but that wasn't part of the
+ * reported symptom (account creation / visitor requests / alerting).
+ */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AdminService {
 
-    private final UserRepository userRepository;
-    private final com.gatesync.repository.mongo.UserMongoRepository userMongoRepository;
+    private final UserMongoRepository userRepository;
     private final FlatRepository flatRepository;
-    private final VisitorRequestRepository visitorRequestRepository;
-    private final com.gatesync.repository.mongo.VisitorRequestMongoRepository visitorRequestMongoRepository;
+    private final VisitorRequestMongoRepository visitorRequestRepository;
     private final com.gatesync.repository.jpa.ClubhouseBookingRepository clubhouseBookingRepository;
     private final com.gatesync.repository.mongo.ClubhouseBookingMongoRepository clubhouseBookingMongoRepository;
     private final com.gatesync.repository.jpa.CommunityProblemRepository communityProblemRepository;
     private final com.gatesync.repository.mongo.CommunityProblemMongoRepository communityProblemMongoRepository;
     private final AuditLogRepository auditLogRepository;
+    private final MongoSequenceService sequenceService;
     private final PasswordEncoder passwordEncoder;
 
     public DashboardStats getDashboardStats() {
@@ -60,10 +73,15 @@ public class AdminService {
                 .build();
     }
 
-    @Transactional
     public User createUser(CreateUserRequest req) {
         Role role = Role.valueOf(req.getRole().toUpperCase());
+
+        if (userRepository.findByLoginId(req.getLoginId()).isPresent()) {
+            throw new RuntimeException("Login ID already registered!");
+        }
+
         User user = User.builder()
+                .id(sequenceService.nextId("users"))
                 .loginId(req.getLoginId())
                 .password(passwordEncoder.encode(req.getPassword()))
                 .fullName(req.getFullName())
@@ -79,27 +97,21 @@ public class AdminService {
                 .accountLocked(false)
                 .build();
 
+        // Synchronous save, exception propagates - if this throws, the admin sees
+        // the actual error instead of a fake "account created" response.
         User saved = userRepository.save(user);
+        log.info("Saved {} user to MongoDB: {}", saved.getRole(), saved.getLoginId());
 
-        java.util.concurrent.CompletableFuture.runAsync(() -> {
-            try {
-                userMongoRepository.save(saved);
-                System.out.println("✅ [MongoDB Compass] Saved " + saved.getRole() + " user: " + saved.getLoginId());
-            } catch (Exception e) {
-                System.err.println("❌ [MongoDB Compass Error] " + e.getMessage());
-            }
-        });
-
-        java.util.concurrent.CompletableFuture.runAsync(() -> {
-            try {
-                auditLogRepository.save(AuditLog.builder()
-                        .actorName("Admin System")
-                        .actorRole("ADMIN")
-                        .actionCategory("USER_MGMT")
-                        .description("Created new " + role.name() + " account in DB & MongoDB Atlas: " + saved.getFullName() + " (" + saved.getLoginId() + ")")
-                        .build());
-            } catch (Exception ignored) {}
-        });
+        try {
+            auditLogRepository.save(AuditLog.builder()
+                    .actorName("Admin System")
+                    .actorRole("ADMIN")
+                    .actionCategory("USER_MGMT")
+                    .description("Created new " + role.name() + " account: " + saved.getFullName() + " (" + saved.getLoginId() + ")")
+                    .build());
+        } catch (Exception e) {
+            log.warn("Audit log write failed on user creation for {}: {}", saved.getLoginId(), e.getMessage());
+        }
 
         return saved;
     }
@@ -116,7 +128,6 @@ public class AdminService {
         return auditLogRepository.findAllByOrderByTimestampDesc();
     }
 
-    @Transactional
     public void clearAllData() {
         List<User> nonAdmins = userRepository.findAll().stream()
                 .filter(u -> u.getRole() != Role.ADMIN || (!"admin".equalsIgnoreCase(u.getLoginId())))
@@ -124,21 +135,19 @@ public class AdminService {
         if (!nonAdmins.isEmpty()) {
             userRepository.deleteAll(nonAdmins);
         }
+        visitorRequestRepository.deleteAll();
 
         try {
-            userMongoRepository.deleteAll();
-            visitorRequestMongoRepository.deleteAll();
             clubhouseBookingMongoRepository.deleteAll();
             communityProblemMongoRepository.deleteAll();
         } catch (Exception e) {
-            System.err.println("❌ MongoDB clear exception: " + e.getMessage());
+            log.warn("MongoDB clear exception (clubhouse/community): {}", e.getMessage());
         }
 
-        visitorRequestRepository.deleteAll();
         clubhouseBookingRepository.deleteAll();
         communityProblemRepository.deleteAll();
         auditLogRepository.deleteAll();
 
-        System.out.println("✅ All Database and MongoDB Atlas Collections cleared successfully.");
+        log.info("All resident/guard accounts, visitor requests, and related data cleared.");
     }
 }

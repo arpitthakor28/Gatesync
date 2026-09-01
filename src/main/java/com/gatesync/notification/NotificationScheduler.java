@@ -3,8 +3,8 @@ package com.gatesync.notification;
 import com.gatesync.model.User;
 import com.gatesync.model.VisitorRequest;
 import com.gatesync.model.VisitorStatus;
-import com.gatesync.repository.jpa.UserRepository;
-import com.gatesync.repository.jpa.VisitorRequestRepository;
+import com.gatesync.repository.mongo.UserMongoRepository;
+import com.gatesync.repository.mongo.VisitorRequestMongoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -14,13 +14,19 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Reads from Mongo now, not H2 - VisitorRequest and User are Mongo-only as of the
+ * persistence fix (see AuthService/AdminService/VisitorService). This was reading
+ * from the JPA repos, which VisitorService no longer writes to, so it would have
+ * silently found zero pending requests every run.
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class NotificationScheduler {
 
-    private final VisitorRequestRepository visitorRequestRepository;
-    private final UserRepository userRepository;
+    private final VisitorRequestMongoRepository visitorRequestRepository;
+    private final UserMongoRepository userRepository;
     private final NotificationService notificationService;
 
     @Scheduled(fixedDelay = 30000)

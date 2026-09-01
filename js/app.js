@@ -20,11 +20,15 @@
     isAuthenticating: false,
     isRefreshing: false,
     notificationDrawerOpen: false,
+    notificationFilter: 'ALL',
+    activeEmergency: null,
+    soundMuted: false,
+    webPushPermission: (typeof Notification !== 'undefined' ? Notification.permission : 'default'),
     selectedPhoto: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80',
     cameraStream: null,
     stompClient: null,
     
-    // Notifications Feed (Reset to Zero)
+    // Notifications Feed
     notifications: [],
 
     // Clubhouse Bookings Module (Reset to Zero)
@@ -93,20 +97,52 @@
   function saveVisitorRequestsToStorage() {
     try {
       localStorage.setItem('gatesync_visitor_requests', JSON.stringify(state.visitorRequests));
+  function broadcastSyncEvent(eventType, payload) {
+    try {
       if (window.gatesyncChannel) {
-        window.gatesyncChannel.postMessage({ type: 'SYNC_VISITORS', requests: state.visitorRequests });
+        window.gatesyncChannel.postMessage({ type: eventType, payload: payload, requests: state.visitorRequests, notifications: state.notifications, emergency: state.activeEmergency });
       }
+    } catch (e) {}
+  }
+
+  function saveNotificationsToStorage() {
+    try {
+      localStorage.setItem('gatesync_notifications', JSON.stringify(state.notifications));
+      broadcastSyncEvent('SYNC_NOTIFICATIONS', state.notifications);
+    } catch (e) {}
+  }
+
+  function loadNotificationsFromStorage() {
+    try {
+      const stored = localStorage.getItem('gatesync_notifications');
+      if (stored) state.notifications = JSON.parse(stored);
     } catch (e) {}
   }
 
   if (typeof BroadcastChannel !== 'undefined') {
     window.gatesyncChannel = new BroadcastChannel('gatesync_sync_channel');
     window.gatesyncChannel.onmessage = (evt) => {
-      if (evt.data && evt.data.type === 'SYNC_VISITORS') {
-        state.visitorRequests = evt.data.requests || [];
+      if (!evt.data) return;
+      const { type, payload, requests, notifications, emergency } = evt.data;
+
+      if (type === 'SYNC_VISITORS') {
+        state.visitorRequests = requests || [];
         render();
-      } else if (evt.data && evt.data.type === 'VISITOR_EVENT') {
-        handleNotificationEvent(evt.data.payload);
+      } else if (type === 'SYNC_NOTIFICATIONS') {
+        state.notifications = notifications || [];
+        render();
+      } else if (type === 'SYNC_EMERGENCY_SOS') {
+        state.activeEmergency = emergency;
+        if (emergency && emergency.status === 'ACTIVE') {
+          playEmergencySound();
+          showToast(`🚨 EMERGENCY SOS: ${emergency.emergencyType} reported by ${emergency.callerName}`, 'emergency');
+        } else {
+          stopEmergencySound();
+        }
+        renderEmergencyBanner();
+        render();
+      } else if (type === 'VISITOR_EVENT') {
+        handleNotificationEvent(payload);
       }
     };
   }
@@ -118,7 +154,6 @@
         const newReqs = JSON.parse(e.newValue) || [];
         state.visitorRequests = newReqs;
 
-        // Check if a new pending visitor entry was submitted by Guard
         const newlyAdded = newReqs.find(nr => !oldReqs.some(or => or.id === nr.id) && nr.status === 'PENDING');
         if (newlyAdded) {
           handleNotificationEvent({
@@ -129,6 +164,19 @@
             purpose: newlyAdded.purpose,
             targetFlat: newlyAdded.targetFlat,
             targetBlock: newlyAdded.targetBlock,
+            photoUrl: newlyAdded.photoUrl,
+            status: newlyAdded.status,
+            timestamp: newlyAdded.createdAt
+          });
+        }
+      } catch (err) {}
+    } else if (e.key === 'gatesync_notifications' && e.newValue) {
+      try {
+        state.notifications = JSON.parse(e.newValue) || [];
+        render();
+      } catch (err) {}
+    }
+  });
             photoUrl: newlyAdded.photoUrl,
             status: 'PENDING'
           });
@@ -302,6 +350,8 @@
     render();
   }
 
+  let wsReconnectTimer = null;
+
   function connectWebSocket() {
     try {
       if (typeof SockJS !== 'undefined' && typeof Stomp !== 'undefined') {
@@ -316,67 +366,251 @@
 
         state.stompClient.connect(connectHeaders, () => {
           console.log('Connected to GateSync WebSocket Broker.');
+          if (wsReconnectTimer) {
+            clearTimeout(wsReconnectTimer);
+            wsReconnectTimer = null;
+          }
+
+          // 1. Guard queue topic
           state.stompClient.subscribe('/topic/guard/queue', message => {
-            const event = JSON.parse(message.body);
-            handleNotificationEvent(event);
+            try { handleNotificationEvent(JSON.parse(message.body)); } catch (e) {}
           });
+
+          // 2. Emergency SOS topic
+          state.stompClient.subscribe('/topic/emergency/sos', message => {
+            try { handleNotificationEvent(JSON.parse(message.body)); } catch (e) {}
+          });
+
+          // 3. Society Broadcast topic
+          state.stompClient.subscribe('/topic/society/broadcast', message => {
+            try { handleNotificationEvent(JSON.parse(message.body)); } catch (e) {}
+          });
+
+          // 4. Role topic
+          if (state.currentUser && state.currentUser.role) {
+            state.stompClient.subscribe(`/topic/role/${state.currentUser.role}`, message => {
+              try { handleNotificationEvent(JSON.parse(message.body)); } catch (e) {}
+            });
+          }
+
+          // 5. Resident unit topic
           if (state.currentUser && state.currentUser.role === 'RESIDENT') {
             const block = state.currentUser.blockNumber || 'A';
             const flat = state.currentUser.flatNumber || '101';
             state.stompClient.subscribe(`/topic/resident/${block}-${flat}`, message => {
-              const event = JSON.parse(message.body);
-              handleNotificationEvent(event);
+              try { handleNotificationEvent(JSON.parse(message.body)); } catch (e) {}
             });
           }
+        }, err => {
+          console.warn('WebSocket connection lost, auto-reconnecting in 4s...');
+          wsReconnectTimer = setTimeout(connectWebSocket, 4000);
         });
       }
-    } catch (e) {}
+    } catch (e) {
+      wsReconnectTimer = setTimeout(connectWebSocket, 5000);
+    }
+  }
+
+  function playAlertSound() {
+    playChimeSound();
+  }
+
+  function playChimeSound() {
+    if (state.soundMuted) return;
+    const audio = document.getElementById('alert-sound');
+    if (audio) {
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
+    }
+  }
+
+  function playEmergencySound() {
+    if (state.soundMuted) return;
+    const audio = document.getElementById('emergency-sound');
+    if (audio) {
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
+    }
+  }
+
+  function stopEmergencySound() {
+    const audio = document.getElementById('emergency-sound');
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  }
+
+  window.toggleSoundMute = function() {
+    state.soundMuted = !state.soundMuted;
+    if (state.soundMuted) {
+      stopEmergencySound();
+      showToast('🔇 Audio alert sound muted', 'info');
+    } else {
+      showToast('🔊 Audio alert sound enabled', 'info');
+    }
+    render();
+  };
+
+  function requestWebPushPermission() {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission().then(permission => {
+        state.webPushPermission = permission;
+        if (permission === 'granted') {
+          showToast('🔔 Browser push notifications enabled', 'success');
+        }
+      });
+    }
+  }
+
+  function showDesktopNotification(title, body, icon = null) {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && document.hidden) {
+      try {
+        new Notification(title, {
+          body: body,
+          icon: icon || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=192&auto=format&fit=crop&q=80',
+          badge: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=192&auto=format&fit=crop&q=80'
+        });
+      } catch (e) {}
+    }
+  }
+
+  function pushNotificationItem(item) {
+    if (!state.notifications) state.notifications = [];
+    state.notifications.unshift(item);
+    saveNotificationsToStorage();
   }
 
   function handleNotificationEvent(event) {
     if (!event) return;
 
-    if (event.requestId) {
-      const existing = state.visitorRequests.find(r => r.id === event.requestId);
-      if (!existing && (event.type === 'VISITOR_NEW' || event.status === 'PENDING')) {
-        const newReq = {
-          id: event.requestId,
-          visitorName: event.visitorName,
-          visitorPhone: event.visitorPhone || 'N/A',
-          purpose: event.purpose,
-          targetFlat: event.targetFlat,
-          targetBlock: event.targetBlock,
-          photoUrl: event.photoUrl || PRESET_PHOTOS[0].url,
-          status: event.status || 'PENDING',
-          timeAgo: 'Just now',
-          createdAt: event.timestamp || new Date().toISOString()
-        };
-        state.visitorRequests.unshift(newReq);
-        saveVisitorRequestsToStorage();
-      } else if (existing && (event.type === 'VISITOR_UPDATE' || event.status)) {
-        existing.status = event.status;
-        saveVisitorRequestsToStorage();
-      }
+    // 1. Emergency SOS Panic Event
+    if (event.type === 'EMERGENCY_SOS' || event.category === 'EMERGENCY_SOS') {
+      const emergency = event.payload || event;
+      state.activeEmergency = emergency;
+      playEmergencySound();
+      showDesktopNotification('🚨 EMERGENCY SOS ALERT', `${emergency.emergencyType || 'General Emergency'} reported by ${emergency.callerName || 'Resident'}`);
+      showToast(`🚨 CRITICAL EMERGENCY SOS: ${emergency.emergencyType || 'General'}!`, 'emergency');
+
+      pushNotificationItem({
+        id: event.id || Date.now(),
+        title: `🚨 EMERGENCY: ${emergency.emergencyType || 'General'}`,
+        message: `Panic alert by ${emergency.callerName || 'User'} (${emergency.blockNumber ? 'Flat ' + emergency.blockNumber + '-' + emergency.flatNumber : 'Gate'})`,
+        category: 'EMERGENCY_SOS',
+        priority: 'CRITICAL',
+        read: false,
+        time: 'Just now'
+      });
+
+      broadcastSyncEvent('SYNC_EMERGENCY_SOS', emergency);
+      renderEmergencyBanner();
+      render();
+      return;
     }
 
-    if (event.type === 'VISITOR_NEW' || event.status === 'PENDING') {
-      showToast(`🔔 ALERT: New Visitor ${event.visitorName || ''} at Gate!`, 'amber');
-      playAlertSound();
-
-      // Automatically open live approval modal for logged-in resident
-      if (state.currentUser && (state.currentUser.role === 'RESIDENT' || state.activeView === 'resident')) {
-        const reqId = event.requestId || (state.visitorRequests.length ? state.visitorRequests[0].id : null);
-        if (reqId) {
-          setTimeout(() => {
-            if (typeof window.openApproveModal === 'function') {
-              window.openApproveModal(reqId);
-            }
-          }, 150);
+    // 2. Visitor Event
+    if (event.requestId || event.type === 'VISITOR_NEW' || event.type === 'VISITOR_UPDATE') {
+      if (event.requestId) {
+        const existing = state.visitorRequests.find(r => r.id === event.requestId);
+        if (!existing && (event.type === 'VISITOR_NEW' || event.status === 'PENDING')) {
+          const newReq = {
+            id: event.requestId,
+            visitorName: event.visitorName,
+            visitorPhone: event.visitorPhone || 'N/A',
+            purpose: event.purpose,
+            targetFlat: event.targetFlat,
+            targetBlock: event.targetBlock,
+            photoUrl: event.photoUrl || PRESET_PHOTOS[0].url,
+            status: event.status || 'PENDING',
+            timeAgo: 'Just now',
+            createdAt: event.timestamp || new Date().toISOString()
+          };
+          state.visitorRequests.unshift(newReq);
+          saveVisitorRequestsToStorage();
+        } else if (existing && (event.type === 'VISITOR_UPDATE' || event.status)) {
+          existing.status = event.status;
+          saveVisitorRequestsToStorage();
         }
       }
-    } else if (event.type === 'VISITOR_UPDATE') {
-      showToast(`Visitor status updated to ${event.status} for ${event.visitorName}`, event.status === 'APPROVED' ? 'success' : 'error');
+
+      if (event.type === 'VISITOR_NEW' || event.status === 'PENDING') {
+        showToast(`🔔 ALERT: New Visitor ${event.visitorName || ''} at Gate!`, 'amber');
+        playChimeSound();
+        showDesktopNotification('🔔 New Visitor at Gate', `Visitor ${event.visitorName || ''} has arrived for Flat ${event.targetBlock || 'A'}-${event.targetFlat || '101'}`);
+
+        pushNotificationItem({
+          id: Date.now(),
+          title: `🔔 Visitor Arrival: ${event.visitorName || 'Guest'}`,
+          message: `Arrived at gate for Flat ${event.targetBlock || 'A'}-${event.targetFlat || '101'}.`,
+          category: 'VISITOR',
+          priority: 'HIGH',
+          read: false,
+          time: 'Just now'
+        });
+
+        // Automatically open live approval modal for logged-in resident
+        if (state.currentUser && (state.currentUser.role === 'RESIDENT' || state.activeView === 'resident')) {
+          const reqId = event.requestId || (state.visitorRequests.length ? state.visitorRequests[0].id : null);
+          if (reqId) {
+            setTimeout(() => {
+              if (typeof window.openApproveModal === 'function') {
+                window.openApproveModal(reqId);
+              }
+            }, 150);
+          }
+        }
+      } else if (event.type === 'VISITOR_UPDATE') {
+        showToast(`Visitor status updated to ${event.status} for ${event.visitorName}`, event.status === 'APPROVED' ? 'success' : 'error');
+        pushNotificationItem({
+          id: Date.now(),
+          title: `Visitor ${event.status}: ${event.visitorName || ''}`,
+          message: `Visitor status changed to ${event.status}.`,
+          category: 'VISITOR',
+          priority: 'NORMAL',
+          read: false,
+          time: 'Just now'
+        });
+      }
     }
+
+    // 3. Announcement / Complaint / Clubhouse events
+    if (event.type === 'ANNOUNCEMENT' || event.category === 'ANNOUNCEMENT') {
+      showToast(`📢 ${event.title || 'Announcement'}: ${event.message || ''}`, 'announcement');
+      playChimeSound();
+      showDesktopNotification(`📢 ${event.title || 'Announcement'}`, event.message || '');
+      pushNotificationItem({
+        id: event.id || Date.now(),
+        title: event.title || '📢 Announcement',
+        message: event.message,
+        category: 'ANNOUNCEMENT',
+        priority: 'HIGH',
+        read: false,
+        time: 'Just now'
+      });
+    } else if (event.category === 'COMPLAINT') {
+      showToast(`⚠️ ${event.title || 'Complaint Update'}`, 'info');
+      pushNotificationItem({
+        id: event.id || Date.now(),
+        title: event.title || 'Complaint Alert',
+        message: event.message,
+        category: 'COMPLAINT',
+        priority: 'NORMAL',
+        read: false,
+        time: 'Just now'
+      });
+    } else if (event.category === 'CLUBHOUSE') {
+      showToast(`🎉 ${event.title || 'Booking Update'}`, 'success');
+      pushNotificationItem({
+        id: event.id || Date.now(),
+        title: event.title || 'Clubhouse Booking',
+        message: event.message,
+        category: 'CLUBHOUSE',
+        priority: 'NORMAL',
+        read: false,
+        time: 'Just now'
+      });
+    }
+
     render();
   }
 
@@ -736,9 +970,20 @@
             </div>
 
             <div class="header-actions">
-              <div class="notification-bell" onclick="toggleNotificationDrawer()">
+              <!-- SOS Panic Action Button -->
+              <button class="btn-sos-panic" onclick="openEmergencyModal()" title="Trigger Panic SOS Alert">
+                🚨 SOS
+              </button>
+
+              <!-- Mute / Unmute Audio Button -->
+              <div class="sound-toggle-btn" onclick="toggleSoundMute()" title="${state.soundMuted ? 'Unmute alert sounds' : 'Mute alert sounds'}">
+                <i data-lucide="${state.soundMuted ? 'volume-x' : 'volume-2'}"></i>
+              </div>
+
+              <!-- Notification Bell with Count Badge -->
+              <div class="notification-bell" onclick="toggleNotificationDrawer()" title="View Notifications">
                 <i data-lucide="bell"></i>
-                ${unreadCount > 0 ? `<span class="bell-badge-dot"></span>` : ''}
+                ${unreadCount > 0 ? `<span class="bell-badge-count">${unreadCount > 99 ? '99+' : unreadCount}</span>` : ''}
               </div>
 
               <div class="user-profile-pill" onclick="openProfileModal()">
@@ -748,26 +993,8 @@
             </div>
           </header>
 
-          <!-- Notification Drawer Dropdown -->
-          ${state.notificationDrawerOpen ? `
-            <div class="notification-drawer" style="position:absolute; right:80px; top:64px; background:white; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 10px 25px rgba(0,0,0,0.15); width:320px; z-index:100; padding:16px;">
-              <div class="drawer-header" style="display:flex; justify-content:space-between; margin-bottom:12px;">
-                <span class="drawer-title" style="font-weight:700; font-size:14px;">Notifications (${state.notifications.length})</span>
-                <span style="font-size:11px; color:var(--primary-blue); cursor:pointer; font-weight:600;" onclick="markNotificationsRead()">Mark all read</span>
-              </div>
-              <div class="drawer-body" style="max-height:260px; overflow-y:auto;">
-                ${state.notifications.length === 0 ? '<div style="font-size:12px; color:var(--text-muted); text-align:center; padding:12px;">No new notifications</div>' : state.notifications.map(n => `
-                  <div class="drawer-item" style="padding:8px 0; border-bottom:1px solid #f1f5f9;">
-                    <div style="font-weight:700; font-size:12px; color:#1e293b; display:flex; justify-content:space-between;">
-                      <span>${n.title}</span>
-                      <span style="font-size:10px; color:var(--text-muted);">${n.time}</span>
-                    </div>
-                    <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${n.message}</div>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-          ` : ''}
+          <!-- Notification Drawer Card -->
+          ${state.notificationDrawerOpen ? renderNotificationDrawerCard() : ''}
 
           <main class="content-canvas">
             ${role === 'ADMIN' ? renderAdminView() : ''}
@@ -3149,6 +3376,338 @@
     `;
     lucide.createIcons();
   };
+
+  function renderNotificationDrawerCard() {
+    const unreadList = state.notifications || [];
+    const filter = state.notificationFilter || 'ALL';
+
+    const filtered = unreadList.filter(n => {
+      if (filter === 'ALL') return true;
+      return n.category === filter;
+    });
+
+    const unreadCount = unreadList.filter(n => !n.read).length;
+
+    return `
+      <div class="notification-drawer-card">
+        <div class="drawer-header-bar">
+          <div class="drawer-title-group">
+            <i data-lucide="bell" style="width:18px; height:18px; color:#2563eb;"></i>
+            <span>Notifications (${unreadCount})</span>
+          </div>
+          <div style="display:flex; gap:12px;">
+            <span class="drawer-action-link" onclick="markNotificationsRead()">Mark read</span>
+            <span class="drawer-action-link" style="color:#ef4444;" onclick="clearAllNotifications()">Clear</span>
+          </div>
+        </div>
+
+        <div class="drawer-filter-pills">
+          <button class="drawer-pill-btn ${filter === 'ALL' ? 'active' : ''}" onclick="filterNotifications('ALL')">All</button>
+          <button class="drawer-pill-btn ${filter === 'VISITOR' ? 'active' : ''}" onclick="filterNotifications('VISITOR')">🔔 Visitors</button>
+          <button class="drawer-pill-btn ${filter === 'EMERGENCY_SOS' ? 'active' : ''}" onclick="filterNotifications('EMERGENCY_SOS')">🚨 SOS</button>
+          <button class="drawer-pill-btn ${filter === 'COMPLAINT' ? 'active' : ''}" onclick="filterNotifications('COMPLAINT')">⚠️ Issues</button>
+          <button class="drawer-pill-btn ${filter === 'CLUBHOUSE' ? 'active' : ''}" onclick="filterNotifications('CLUBHOUSE')">🎉 Bookings</button>
+          <button class="drawer-pill-btn ${filter === 'ANNOUNCEMENT' ? 'active' : ''}" onclick="filterNotifications('ANNOUNCEMENT')">📢 News</button>
+        </div>
+
+        <div class="drawer-item-list">
+          ${filtered.length === 0 ? `
+            <div style="font-size:12px; color:#94a3b8; text-align:center; padding:24px;">No notifications in this filter</div>
+          ` : filtered.map((n, idx) => `
+            <div class="drawer-item-row ${!n.read ? 'unread' : ''}" onclick="markNotificationItemRead(${idx})">
+              <div class="drawer-item-icon ${n.category === 'EMERGENCY_SOS' ? 'icon-cat-emergency' : n.category === 'VISITOR' ? 'icon-cat-visitor' : n.category === 'COMPLAINT' ? 'icon-cat-complaint' : n.category === 'CLUBHOUSE' ? 'icon-cat-booking' : 'icon-cat-announcement'}">
+                <i data-lucide="${n.category === 'EMERGENCY_SOS' ? 'alert-triangle' : n.category === 'VISITOR' ? 'user-check' : n.category === 'COMPLAINT' ? 'help-circle' : n.category === 'CLUBHOUSE' ? 'calendar' : 'megaphone'}"></i>
+              </div>
+              <div class="drawer-item-content">
+                <div class="drawer-item-top">
+                  <span class="drawer-item-title">${n.title}</span>
+                  <span class="drawer-item-time">${n.time || 'Just now'}</span>
+                </div>
+                <div class="drawer-item-msg">${n.message}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="drawer-footer-bar">
+          <span style="font-size:11px; color:#64748b;">Cross-Tab Realtime Synced</span>
+          ${state.currentUser && state.currentUser.role === 'ADMIN' ? `
+            <button class="btn btn-secondary" style="font-size:11px; padding:4px 10px;" onclick="openAnnouncementModal()">+ Broadcast News</button>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  window.filterNotifications = function(cat) {
+    state.notificationFilter = cat;
+    render();
+  };
+
+  window.markNotificationItemRead = function(idx) {
+    if (state.notifications && state.notifications[idx]) {
+      state.notifications[idx].read = true;
+      saveNotificationsToStorage();
+      render();
+    }
+  };
+
+  window.markNotificationsRead = function() {
+    if (state.notifications) {
+      state.notifications.forEach(n => n.read = true);
+      saveNotificationsToStorage();
+      showToast('All notifications marked as read', 'info');
+      render();
+    }
+  };
+
+  window.clearAllNotifications = function() {
+    state.notifications = [];
+    saveNotificationsToStorage();
+    showToast('Notifications cleared', 'info');
+    render();
+  };
+
+  window.openEmergencyModal = function() {
+    requestWebPushPermission();
+    const user = state.currentUser || { fullName: 'Resident', role: 'RESIDENT', blockNumber: 'A', flatNumber: '101' };
+    const container = document.getElementById('modal-container');
+    container.innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-card" style="border-top:5px solid #dc2626;">
+          <div class="modal-header">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:24px;">🚨</span>
+              <h3 style="font-family:var(--font-heading); font-size:18px; font-weight:800; color:#dc2626;">Trigger Emergency Panic SOS</h3>
+            </div>
+            <i data-lucide="x" style="cursor:pointer;" onclick="closeModal()"></i>
+          </div>
+          <div class="modal-body">
+            <p style="font-size:13px; color:#64748b; margin-bottom:16px;">
+              This will immediately broadcast a critical panic alert to <strong>all security guards, society admins, and open terminals</strong> with high-priority audio sirens.
+            </p>
+
+            <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
+              <label style="font-size:12px; font-weight:700; color:#1e293b;">Select Emergency Category:</label>
+              <select id="sos-category" class="guard-tap-control" style="width:100%; font-weight:700;">
+                <option value="MEDICAL">🚑 Medical Emergency</option>
+                <option value="FIRE">🔥 Fire Hazard Alert</option>
+                <option value="SECURITY">🛡️ Intruder / Security Threat</option>
+                <option value="GATE_DISTURBANCE">🚪 Gate Disturbance / Conflict</option>
+                <option value="GENERAL">⚠️ General Panic Alert</option>
+              </select>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:20px;">
+              <label style="font-size:12px; font-weight:700; color:#1e293b;">Additional Notes / Location Details (Optional):</label>
+              <textarea id="sos-notes" rows="2" placeholder="e.g. Need immediate ambulance at Block A Lift Lobby" style="width:100%; padding:10px; border-radius:8px; border:1px solid #cbd5e1; font-size:13px;"></textarea>
+            </div>
+
+            <div style="display:flex; gap:10px;">
+              <button class="btn btn-secondary" onclick="closeModal()" style="flex:1;">Cancel</button>
+              <button class="btn btn-primary" onclick="submitEmergencySos()" style="flex:2; background:#dc2626; border-color:#dc2626; font-weight:800;">
+                🚨 BROADCAST SOS NOW
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    lucide.createIcons();
+  };
+
+  window.submitEmergencySos = function() {
+    const user = state.currentUser || { fullName: 'Resident User', role: 'RESIDENT', blockNumber: 'A', flatNumber: '101' };
+    const categorySelect = document.getElementById('sos-category');
+    const notesInput = document.getElementById('sos-notes');
+
+    const emergencyPayload = {
+      emergencyType: categorySelect ? categorySelect.value : 'GENERAL',
+      callerName: user.fullName || 'Resident',
+      callerRole: user.role || 'RESIDENT',
+      callerPhone: user.phone || '9988776655',
+      blockNumber: user.blockNumber || 'A',
+      flatNumber: user.flatNumber || '101',
+      note: notesInput ? notesInput.value : '',
+      status: 'ACTIVE',
+      createdAt: new Date().toISOString()
+    };
+
+    closeModal();
+
+    fetch('/api/emergency/sos', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + (state.token || ''),
+        'X-User-Name': user.fullName || 'Resident'
+      },
+      body: JSON.stringify(emergencyPayload)
+    }).catch(() => {});
+
+    handleNotificationEvent({
+      type: 'EMERGENCY_SOS',
+      category: 'EMERGENCY_SOS',
+      payload: emergencyPayload
+    });
+  };
+
+  function renderEmergencyBanner() {
+    const root = document.getElementById('emergency-banner-root');
+    if (!root) return;
+
+    if (!state.activeEmergency || state.activeEmergency.status === 'RESOLVED') {
+      root.innerHTML = '';
+      return;
+    }
+
+    const em = state.activeEmergency;
+    const isGuardOrAdmin = state.currentUser && (state.currentUser.role === 'GUARD' || state.currentUser.role === 'ADMIN');
+
+    root.innerHTML = `
+      <div class="emergency-banner">
+        <div class="emergency-banner-left">
+          <div class="emergency-siren-icon">🚨</div>
+          <div>
+            <div class="emergency-title">CRITICAL EMERGENCY SOS: ${em.emergencyType || 'ALERT'}</div>
+            <div class="emergency-details">
+              Reported by <strong>${em.callerName || 'Resident'}</strong> (${em.blockNumber ? 'Flat ' + em.blockNumber + '-' + em.flatNumber : 'Gate'})
+              ${em.note ? ' • Note: "' + em.note + '"' : ''}
+              ${em.status === 'ACKNOWLEDGED' ? ' • <span style="color:#fef08a; font-weight:700;">Acknowledged by ' + (em.acknowledgedBy || 'Guard') + '</span>' : ''}
+            </div>
+          </div>
+        </div>
+        <div class="emergency-banner-actions">
+          ${isGuardOrAdmin && em.status !== 'ACKNOWLEDGED' ? `
+            <button class="btn-ack-emergency" onclick="acknowledgeEmergencyAlert(${em.id || 1})">
+              👮 Acknowledge & Dispatch
+            </button>
+          ` : ''}
+          ${isGuardOrAdmin ? `
+            <button class="btn-dismiss-emergency" onclick="resolveEmergencyAlert(${em.id || 1})">
+              ✅ Resolve Alert
+            </button>
+          ` : `
+            <button class="btn-dismiss-emergency" onclick="dismissEmergencyBanner()">
+              Dismiss Banner
+            </button>
+          `}
+        </div>
+      </div>
+    `;
+  }
+
+  window.acknowledgeEmergencyAlert = function(id) {
+    if (state.activeEmergency) {
+      state.activeEmergency.status = 'ACKNOWLEDGED';
+      state.activeEmergency.acknowledgedBy = state.currentUser ? state.currentUser.fullName : 'On-Duty Guard';
+      stopEmergencySound();
+      showToast('Emergency alert acknowledged by guard', 'success');
+      broadcastSyncEvent('SYNC_EMERGENCY_SOS', state.activeEmergency);
+      renderEmergencyBanner();
+    }
+  };
+
+  window.resolveEmergencyAlert = function(id) {
+    if (state.activeEmergency) {
+      state.activeEmergency.status = 'RESOLVED';
+      stopEmergencySound();
+      showToast('Emergency alert marked as resolved', 'success');
+      broadcastSyncEvent('SYNC_EMERGENCY_SOS', state.activeEmergency);
+      state.activeEmergency = null;
+      renderEmergencyBanner();
+    }
+  };
+
+  window.dismissEmergencyBanner = function() {
+    stopEmergencySound();
+    state.activeEmergency = null;
+    renderEmergencyBanner();
+  };
+
+  window.openAnnouncementModal = function() {
+    const container = document.getElementById('modal-container');
+    container.innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h3 style="font-family:var(--font-heading); font-size:16px; font-weight:700;">📢 Broadcast Society Announcement</h3>
+            <i data-lucide="x" style="cursor:pointer;" onclick="closeModal()"></i>
+          </div>
+          <div class="modal-body">
+            <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:16px;">
+              <div>
+                <label style="font-size:12px; font-weight:700; color:#1e293b;">Title:</label>
+                <input type="text" id="announce-title" placeholder="e.g. Water Tank Maintenance Tomorrow" class="guard-tap-control" style="width:100%; margin-top:4px;">
+              </div>
+
+              <div>
+                <label style="font-size:12px; font-weight:700; color:#1e293b;">Message Content:</label>
+                <textarea id="announce-msg" rows="3" placeholder="Water supply will be temporarily paused from 10 AM to 2 PM." style="width:100%; padding:10px; border-radius:8px; border:1px solid #cbd5e1; font-size:13px; margin-top:4px;"></textarea>
+              </div>
+
+              <div>
+                <label style="font-size:12px; font-weight:700; color:#1e293b;">Target Group:</label>
+                <select id="announce-target" class="guard-tap-control" style="width:100%; margin-top:4px;">
+                  <option value="ALL">All Society Users</option>
+                  <option value="RESIDENT">Residents Only</option>
+                  <option value="GUARD">Security Guards Only</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display:flex; gap:10px;">
+              <button class="btn btn-secondary" onclick="closeModal()" style="flex:1;">Cancel</button>
+              <button class="btn btn-primary" onclick="submitAnnouncement()" style="flex:2;">📢 Broadcast Announcement</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    lucide.createIcons();
+  };
+
+  window.submitAnnouncement = function() {
+    const titleInput = document.getElementById('announce-title');
+    const msgInput = document.getElementById('announce-msg');
+    const targetSelect = document.getElementById('announce-target');
+
+    if (!titleInput || !msgInput || !titleInput.value || !msgInput.value) {
+      showToast('Please provide a title and message content', 'error');
+      return;
+    }
+
+    const title = titleInput.value;
+    const msg = msgInput.value;
+    const target = targetSelect ? targetSelect.value : 'ALL';
+
+    closeModal();
+
+    fetch('/api/notifications/announcements', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + (state.token || ''),
+        'X-User-Name': state.currentUser ? state.currentUser.fullName : 'Admin'
+      },
+      body: JSON.stringify({
+        title: title,
+        message: msg,
+        category: 'ANNOUNCEMENT',
+        priority: 'HIGH',
+        targetRole: target
+      })
+    }).catch(() => {});
+
+    handleNotificationEvent({
+      type: 'ANNOUNCEMENT',
+      category: 'ANNOUNCEMENT',
+      title: title,
+      message: msg
+    });
+  };
+
+  loadNotificationsFromStorage();
 
   window.closeModal = function () {
     if (typeof closeCameraModal === 'function') closeCameraModal();

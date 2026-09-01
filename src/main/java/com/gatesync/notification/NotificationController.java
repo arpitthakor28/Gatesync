@@ -1,6 +1,7 @@
 package com.gatesync.notification;
 
 import com.gatesync.dto.NotificationDtos.*;
+import com.gatesync.model.Notification;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -8,12 +9,45 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/resident/notifications")
+@RequestMapping("/api/notifications")
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*")
 public class NotificationController {
 
+    private final NotificationService notificationService;
     private final NotificationLogRepository notificationLogRepository;
+
+    @GetMapping("/my")
+    public ResponseEntity<List<Notification>> getMyNotifications() {
+        return ResponseEntity.ok(notificationService.getAllNotifications());
+    }
+
+    @PutMapping("/{id}/read")
+    public ResponseEntity<Void> markAsRead(@PathVariable Long id) {
+        notificationService.markAsRead(id);
+        return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/read-all")
+    public ResponseEntity<Void> markAllAsRead() {
+        notificationService.markAllAsRead();
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/clear")
+    public ResponseEntity<Void> clearAll() {
+        notificationService.clearAll();
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/announcements")
+    public ResponseEntity<Void> sendAnnouncement(
+            @RequestBody AnnouncementRequest request,
+            @RequestHeader(value = "X-User-Name", defaultValue = "Admin") String senderName
+    ) {
+        notificationService.broadcastAnnouncement(request, senderName);
+        return ResponseEntity.ok().build();
+    }
 
     @GetMapping("/preferences")
     public ResponseEntity<NotificationPreferencesResponse> getPreferences() {

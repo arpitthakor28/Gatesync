@@ -1,34 +1,47 @@
 package com.gatesync.service;
 
+import com.gatesync.config.MongoSequenceService;
 import com.gatesync.dto.VisitorDtos.*;
 import com.gatesync.model.*;
 import com.gatesync.notification.NotificationService;
-import com.gatesync.repository.jpa.*;
+import com.gatesync.repository.jpa.AuditLogRepository;
+import com.gatesync.repository.jpa.PreApprovedPassRepository;
+import com.gatesync.repository.mongo.UserMongoRepository;
+import com.gatesync.repository.mongo.VisitorRequestMongoRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * VisitorRequest and User lookups are Mongo-only - see AuthService for why (H2 is
+ * in-memory and gets wiped on every Render cold start after idle spin-down).
+ *
+ * PreApprovedPass and AuditLog are intentionally still on H2/JPA for now (out of
+ * scope for this fix) - they don't affect the reported "visitor request/account
+ * data disappears" symptom.
+ */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class VisitorService {
 
-    private final VisitorRequestRepository visitorRequestRepository;
-    private final com.gatesync.repository.mongo.VisitorRequestMongoRepository visitorRequestMongoRepository;
+    private final VisitorRequestMongoRepository visitorRequestRepository;
     private final PreApprovedPassRepository preApprovedPassRepository;
     private final AuditLogRepository auditLogRepository;
-    private final UserRepository userRepository;
+    private final UserMongoRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final NotificationService notificationService;
+    private final MongoSequenceService sequenceService;
 
-    @Transactional
     public VisitorRequest registerVisitor(VisitorRegistrationRequest req) {
         VisitorRequest request = VisitorRequest.builder()
+                .id(sequenceService.nextId("visitor_requests"))
                 .visitorName(req.getVisitorName())
                 .visitorPhone(req.getVisitorPhone())
                 .purpose(req.getPurpose())
@@ -39,26 +52,24 @@ public class VisitorService {
                 .gateName(req.getGateName() != null ? req.getGateName() : "Main Gate A")
                 .guardName(req.getGuardName() != null ? req.getGuardName() : "On-Duty Guard")
                 .status(VisitorStatus.PENDING)
+                .createdAt(LocalDateTime.now())
                 .build();
 
+        // Synchronous save, exception propagates - a failed write here should NOT
+        // report success back to the guard.
         VisitorRequest saved = visitorRequestRepository.save(request);
+        log.info("Saved visitor entry to MongoDB: {}", saved.getVisitorName());
 
-        java.util.concurrent.CompletableFuture.runAsync(() -> {
-            try {
-                visitorRequestMongoRepository.save(saved);
-                System.out.println("✅ [MongoDB Compass] Saved visitor entry: " + saved.getVisitorName());
-            } catch (Exception e) {
-                System.err.println("❌ [MongoDB Compass Error] " + e.getMessage());
-            }
-        });
-
-        // Audit Log
-        auditLogRepository.save(AuditLog.builder()
-                .actorName(saved.getGuardName())
-                .actorRole("GUARD")
-                .actionCategory("VISITOR_ENTRY")
-                .description("Registered new visitor '" + saved.getVisitorName() + "' for Flat " + saved.getTargetBlock() + "-" + saved.getTargetFlat())
-                .build());
+        try {
+            auditLogRepository.save(AuditLog.builder()
+                    .actorName(saved.getGuardName())
+                    .actorRole("GUARD")
+                    .actionCategory("VISITOR_ENTRY")
+                    .description("Registered new visitor '" + saved.getVisitorName() + "' for Flat " + saved.getTargetBlock() + "-" + saved.getTargetFlat())
+                    .build());
+        } catch (Exception e) {
+            log.warn("Audit log write failed on visitor registration: {}", e.getMessage());
+        }
 
         // Find Target Resident
         Optional<User> targetUser = userRepository.findByBlockNumberAndFlatNumber(
@@ -66,13 +77,17 @@ public class VisitorService {
                 saved.getTargetFlat() != null ? saved.getTargetFlat() : "101"
         );
 
+        if (targetUser.isEmpty()) {
+            log.warn("No resident found for {}-{}; visitor alert will only reach the guard queue.",
+                    saved.getTargetBlock(), saved.getTargetFlat());
+        }
+
         // Dispatch Multi-channel Notification (WebSocket + SMS fallback + Audit Logging)
         notificationService.notifyResidentOfVisitor(saved, targetUser.orElse(null));
 
         return saved;
     }
 
-    @Transactional
     public VisitorRequest respondToRequest(ApprovalDecisionRequest req, String responderName) {
         VisitorRequest request = visitorRequestRepository.findById(req.getRequestId())
                 .orElseThrow(() -> new RuntimeException("Visitor request not found"));
@@ -87,13 +102,16 @@ public class VisitorService {
 
         VisitorRequest updated = visitorRequestRepository.save(request);
 
-        // Audit Log
-        auditLogRepository.save(AuditLog.builder()
-                .actorName(responderName)
-                .actorRole("RESIDENT")
-                .actionCategory("APPROVAL")
-                .description(req.getStatus().name() + " entry request for visitor '" + updated.getVisitorName() + "'")
-                .build());
+        try {
+            auditLogRepository.save(AuditLog.builder()
+                    .actorName(responderName)
+                    .actorRole("RESIDENT")
+                    .actionCategory("APPROVAL")
+                    .description(req.getStatus().name() + " entry request for visitor '" + updated.getVisitorName() + "'")
+                    .build());
+        } catch (Exception e) {
+            log.warn("Audit log write failed on visitor response: {}", e.getMessage());
+        }
 
         // Broadcast Realtime Update
         NotificationEvent event = NotificationEvent.builder()
@@ -114,7 +132,6 @@ public class VisitorService {
         return updated;
     }
 
-    @Transactional
     public PreApprovedPass createPreApprovedPass(PreApprovePassRequest req) {
         String passCode = "GS-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
         PreApprovedPass pass = PreApprovedPass.builder()
@@ -130,12 +147,16 @@ public class VisitorService {
 
         PreApprovedPass saved = preApprovedPassRepository.save(pass);
 
-        auditLogRepository.save(AuditLog.builder()
-                .actorName(req.getResidentName())
-                .actorRole("RESIDENT")
-                .actionCategory("PRE_APPROVE")
-                .description("Generated pre-approved pass " + passCode + " for guest '" + req.getGuestName() + "'")
-                .build());
+        try {
+            auditLogRepository.save(AuditLog.builder()
+                    .actorName(req.getResidentName())
+                    .actorRole("RESIDENT")
+                    .actionCategory("PRE_APPROVE")
+                    .description("Generated pre-approved pass " + passCode + " for guest '" + req.getGuestName() + "'")
+                    .build());
+        } catch (Exception e) {
+            log.warn("Audit log write failed on pre-approved pass creation: {}", e.getMessage());
+        }
 
         return saved;
     }

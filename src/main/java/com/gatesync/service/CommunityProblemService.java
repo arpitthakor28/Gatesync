@@ -2,6 +2,9 @@ package com.gatesync.service;
 
 import com.gatesync.model.AuditLog;
 import com.gatesync.model.CommunityProblem;
+import com.gatesync.model.NotificationCategory;
+import com.gatesync.model.NotificationPriority;
+import com.gatesync.notification.NotificationService;
 import com.gatesync.repository.jpa.AuditLogRepository;
 import com.gatesync.repository.jpa.CommunityProblemRepository;
 import com.gatesync.repository.mongo.CommunityProblemMongoRepository;
@@ -18,6 +21,7 @@ public class CommunityProblemService {
     private final CommunityProblemRepository communityProblemRepository;
     private final CommunityProblemMongoRepository communityProblemMongoRepository;
     private final AuditLogRepository auditLogRepository;
+    private final NotificationService notificationService;
 
     @Transactional
     public CommunityProblem reportProblem(CommunityProblem problem) {
@@ -44,6 +48,16 @@ public class CommunityProblemService {
                 .actionCategory("COMMUNITY_ISSUE")
                 .description("Reported community problem: '" + saved.getTitle() + "' in category " + saved.getCategory())
                 .build());
+
+        // Notify Admin of new complaint
+        notificationService.createCategoryNotification(
+                "⚠️ New Community Problem Reported",
+                (saved.getReporterName() != null ? saved.getReporterName() : "Resident") + " reported issue: " + saved.getTitle() + " (" + saved.getCategory() + ")",
+                NotificationCategory.COMPLAINT,
+                NotificationPriority.NORMAL,
+                "ADMIN",
+                null
+        );
 
         return saved;
     }
@@ -73,6 +87,16 @@ public class CommunityProblemService {
                 .actionCategory("COMMUNITY_ISSUE")
                 .description("Marked community problem ID " + id + " ('" + updated.getTitle() + "') as RESOLVED")
                 .build());
+
+        // Notify resident/community of resolution
+        notificationService.createCategoryNotification(
+                "✅ Issue Resolved: " + updated.getTitle(),
+                "Admin reply: " + updated.getAdminReply(),
+                NotificationCategory.COMPLAINT,
+                NotificationPriority.NORMAL,
+                "RESIDENT",
+                updated.getReporterFlat()
+        );
 
         return updated;
     }

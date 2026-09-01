@@ -11,4 +11,5 @@ public interface UserMongoRepository extends MongoRepository<User, Long> {
     Optional<User> findByPhone(String phone);
     Optional<User> findByLoginIdOrPhone(String loginId, String phone);
     List<User> findByRole(Role role);
+    Optional<User> findByBlockNumberAndFlatNumber(String blockNumber, String flatNumber);
 }

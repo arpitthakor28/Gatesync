@@ -1,25 +1,36 @@
 package com.gatesync.service;
 
+import com.gatesync.config.MongoSequenceService;
 import com.gatesync.dto.AuthDtos.*;
 import com.gatesync.model.AuditLog;
 import com.gatesync.model.Role;
 import com.gatesync.model.User;
 import com.gatesync.repository.jpa.AuditLogRepository;
-import com.gatesync.repository.jpa.UserRepository;
+import com.gatesync.repository.mongo.UserMongoRepository;
 import com.gatesync.security.CustomUserPrincipal;
 import com.gatesync.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * User accounts (login, registration, password reset) are stored ONLY in MongoDB.
+ * Do not reintroduce the JPA/H2 UserRepository here - H2 is in-memory and gets wiped
+ * on every server restart (which on Render's free tier happens on every cold start
+ * after idle spin-down), which is what caused accounts and logins to silently vanish.
+ *
+ * AuditLog is intentionally still on H2/JPA for now (out of scope for this fix) -
+ * it does not affect login/account-creation correctness, only audit history durability.
+ */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthService {
 
-    private final UserRepository userRepository;
-    private final com.gatesync.repository.mongo.UserMongoRepository userMongoRepository;
+    private final UserMongoRepository userRepository;
     private final AuditLogRepository auditLogRepository;
+    private final MongoSequenceService sequenceService;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
 
@@ -37,13 +48,7 @@ public class AuthService {
                     }
                     return userRepository.findByBlockNumberAndFlatNumber("A", input);
                 })
-                .orElseGet(() -> {
-                    try {
-                        return userMongoRepository.findByLoginIdOrPhone(input, input).orElse(null);
-                    } catch (Exception e) {
-                        return null;
-                    }
-                });
+                .orElse(null);
 
         if (user == null) {
             throw new RuntimeException("Invalid credentials");
@@ -63,16 +68,16 @@ public class AuthService {
 
         String jwtToken = tokenProvider.generateToken(user);
 
-        java.util.concurrent.CompletableFuture.runAsync(() -> {
-            try {
-                auditLogRepository.save(AuditLog.builder()
-                        .actorName(user.getFullName())
-                        .actorRole(user.getRole().name())
-                        .actionCategory("SECURITY")
-                        .description("User logged in successfully via ID: " + user.getLoginId())
-                        .build());
-            } catch (Exception ignored) {}
-        });
+        try {
+            auditLogRepository.save(AuditLog.builder()
+                    .actorName(user.getFullName())
+                    .actorRole(user.getRole().name())
+                    .actionCategory("SECURITY")
+                    .description("User logged in successfully via ID: " + user.getLoginId())
+                    .build());
+        } catch (Exception e) {
+            log.warn("Audit log write failed on login for {}: {}", user.getLoginId(), e.getMessage());
+        }
 
         return LoginResponse.builder()
                 .token(jwtToken)
@@ -87,13 +92,13 @@ public class AuthService {
                 .build();
     }
 
-    @Transactional
     public LoginResponse registerAdmin(RegisterAdminRequest req) {
         if (userRepository.findByLoginId(req.getLoginId()).isPresent()) {
             throw new RuntimeException("Login ID already registered!");
         }
 
         User admin = User.builder()
+                .id(sequenceService.nextId("users"))
                 .loginId(req.getLoginId())
                 .password(passwordEncoder.encode(req.getPassword()))
                 .fullName(req.getFullName())
@@ -106,29 +111,23 @@ public class AuthService {
                 .accountLocked(false)
                 .build();
 
+        // Synchronous save, exception propagates instead of being swallowed - if this
+        // throws, the caller gets a real error instead of a fake "success" response.
         User saved = userRepository.save(admin);
+        log.info("Saved Admin user to MongoDB: {}", saved.getLoginId());
 
-        java.util.concurrent.CompletableFuture.runAsync(() -> {
-            try {
-                userMongoRepository.save(saved);
-                System.out.println("✅ [MongoDB Compass] Saved Admin user: " + saved.getLoginId());
-            } catch (Exception e) {
-                System.err.println("❌ [MongoDB Compass Error] " + e.getMessage());
-            }
-        });
+        try {
+            auditLogRepository.save(AuditLog.builder()
+                    .actorName(saved.getFullName())
+                    .actorRole("ADMIN")
+                    .actionCategory("SECURITY")
+                    .description("New Admin account registered: " + saved.getLoginId())
+                    .build());
+        } catch (Exception e) {
+            log.warn("Audit log write failed on admin registration for {}: {}", saved.getLoginId(), e.getMessage());
+        }
 
         String jwtToken = tokenProvider.generateToken(saved);
-
-        java.util.concurrent.CompletableFuture.runAsync(() -> {
-            try {
-                auditLogRepository.save(AuditLog.builder()
-                        .actorName(saved.getFullName())
-                        .actorRole("ADMIN")
-                        .actionCategory("SECURITY")
-                        .description("New Admin account registered: " + saved.getLoginId())
-                        .build());
-            } catch (Exception ignored) {}
-        });
 
         return LoginResponse.builder()
                 .token(jwtToken)
@@ -141,7 +140,6 @@ public class AuthService {
                 .build();
     }
 
-    @Transactional
     public ApiResponse resetPassword(PasswordResetRequest req) {
         User user = null;
         if (req.getUserId() != null) {
@@ -161,27 +159,20 @@ public class AuthService {
         user.setMustResetPassword(false);
         userRepository.save(user);
 
-        java.util.concurrent.CompletableFuture.runAsync(() -> {
-            try {
-                userMongoRepository.save(user);
-            } catch (Exception ignored) {}
-        });
-
-        java.util.concurrent.CompletableFuture.runAsync(() -> {
-            try {
-                auditLogRepository.save(AuditLog.builder()
-                        .actorName(user.getFullName())
-                        .actorRole(user.getRole() != null ? user.getRole().name() : "USER")
-                        .actionCategory("SECURITY")
-                        .description("Password successfully updated and verified for: " + user.getLoginId())
-                        .build());
-            } catch (Exception ignored) {}
-        });
+        try {
+            auditLogRepository.save(AuditLog.builder()
+                    .actorName(user.getFullName())
+                    .actorRole(user.getRole() != null ? user.getRole().name() : "USER")
+                    .actionCategory("SECURITY")
+                    .description("Password successfully updated and verified for: " + user.getLoginId())
+                    .build());
+        } catch (Exception e) {
+            log.warn("Audit log write failed on password reset for {}: {}", user.getLoginId(), e.getMessage());
+        }
 
         return new ApiResponse(true, "Password updated successfully!");
     }
 
-    @Transactional
     public ApiResponse setPassword(CustomUserPrincipal principal, PasswordResetRequest req) {
         User user = userRepository.findById(principal.getUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -196,12 +187,16 @@ public class AuthService {
         user.setMustResetPassword(false);
         userRepository.save(user);
 
-        auditLogRepository.save(AuditLog.builder()
-                .actorName(user.getFullName())
-                .actorRole(user.getRole().name())
-                .actionCategory("SECURITY")
-                .description("Password updated via forced/authenticated reset flow.")
-                .build());
+        try {
+            auditLogRepository.save(AuditLog.builder()
+                    .actorName(user.getFullName())
+                    .actorRole(user.getRole().name())
+                    .actionCategory("SECURITY")
+                    .description("Password updated via forced/authenticated reset flow.")
+                    .build());
+        } catch (Exception e) {
+            log.warn("Audit log write failed on setPassword for {}: {}", user.getLoginId(), e.getMessage());
+        }
 
         return new ApiResponse(true, "Password set successfully!");
     }

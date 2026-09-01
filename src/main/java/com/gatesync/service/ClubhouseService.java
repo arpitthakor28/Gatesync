@@ -2,6 +2,9 @@ package com.gatesync.service;
 
 import com.gatesync.model.AuditLog;
 import com.gatesync.model.ClubhouseBooking;
+import com.gatesync.model.NotificationCategory;
+import com.gatesync.model.NotificationPriority;
+import com.gatesync.notification.NotificationService;
 import com.gatesync.repository.jpa.AuditLogRepository;
 import com.gatesync.repository.jpa.ClubhouseBookingRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +20,7 @@ public class ClubhouseService {
     private final ClubhouseBookingRepository clubhouseBookingRepository;
     private final com.gatesync.repository.mongo.ClubhouseBookingMongoRepository clubhouseBookingMongoRepository;
     private final AuditLogRepository auditLogRepository;
+    private final NotificationService notificationService;
 
     @Transactional
     public ClubhouseBooking createBooking(ClubhouseBooking booking) {
@@ -44,6 +48,16 @@ public class ClubhouseService {
                 .actionCategory("CLUBHOUSE")
                 .description("Submitted Clubhouse Booking request: '" + saved.getTitle() + "' at " + saved.getVenue())
                 .build());
+
+        // Notify admin of new booking
+        notificationService.createCategoryNotification(
+                "🎉 New Clubhouse Booking Request",
+                (saved.getResidentName() != null ? saved.getResidentName() : "Resident") + " requested " + saved.getVenue() + " for '" + saved.getTitle() + "' on " + saved.getBookingDate(),
+                NotificationCategory.CLUBHOUSE,
+                NotificationPriority.NORMAL,
+                "ADMIN",
+                null
+        );
 
         return saved;
     }
@@ -75,6 +89,16 @@ public class ClubhouseService {
                 .actionCategory("CLUBHOUSE")
                 .description("Updated Clubhouse Booking ID " + id + " status to " + status)
                 .build());
+
+        // Notify resident of booking decision
+        notificationService.createCategoryNotification(
+                (status.equalsIgnoreCase("APPROVED") ? "✅ Clubhouse Booking Approved" : "❌ Clubhouse Booking Status: " + status),
+                "Your booking for '" + updated.getTitle() + "' at " + updated.getVenue() + " has been " + status.toLowerCase() + ".",
+                NotificationCategory.CLUBHOUSE,
+                NotificationPriority.NORMAL,
+                "RESIDENT",
+                updated.getResidentFlat()
+        );
 
         return updated;
     }
