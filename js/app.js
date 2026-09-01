@@ -196,14 +196,19 @@
   });
 
   function loadSavedSession() {
-    const savedUser = localStorage.getItem('gatesync_user');
-    const savedToken = localStorage.getItem('gatesync_token') || 'token_pwa_session';
+    let savedUser = localStorage.getItem('gatesync_user');
+    let savedToken = localStorage.getItem('gatesync_token');
+    if (!savedUser) {
+      savedUser = sessionStorage.getItem('gatesync_user');
+      savedToken = sessionStorage.getItem('gatesync_token');
+    }
     if (savedUser) {
       try {
         const user = JSON.parse(savedUser);
         if (user && user.role) {
-          state.currentUser = user;
-          state.token = savedToken;
+          const normalized = normalizeResident(user) || user;
+          state.currentUser = normalized;
+          state.token = savedToken || 'token_pwa_session';
           state.activeView = user.role.toLowerCase();
           return;
         }
@@ -212,11 +217,28 @@
     state.activeView = 'landing';
   }
 
-  function saveSession(user, token) {
-    state.currentUser = user;
+  function saveSession(user, token, rememberMe = true) {
+    const normalizedUser = normalizeResident(user) || user;
+    state.currentUser = normalizedUser;
     state.token = token;
-    localStorage.setItem('gatesync_user', JSON.stringify(user));
-    localStorage.setItem('gatesync_token', token);
+
+    if (rememberMe) {
+      localStorage.setItem('gatesync_user', JSON.stringify(normalizedUser));
+      localStorage.setItem('gatesync_token', token);
+      sessionStorage.removeItem('gatesync_user');
+      sessionStorage.removeItem('gatesync_token');
+    } else {
+      sessionStorage.setItem('gatesync_user', JSON.stringify(normalizedUser));
+      sessionStorage.setItem('gatesync_token', token);
+      localStorage.removeItem('gatesync_user');
+      localStorage.removeItem('gatesync_token');
+    }
+
+    if (state.stompClient && state.stompClient.connected) {
+      subscribeUserTopics();
+    } else {
+      connectWebSocket();
+    }
   }
 
   function clearSession() {
@@ -224,6 +246,8 @@
     state.token = null;
     localStorage.removeItem('gatesync_user');
     localStorage.removeItem('gatesync_token');
+    sessionStorage.removeItem('gatesync_user');
+    sessionStorage.removeItem('gatesync_token');
     state.activeView = 'landing';
     render();
     showToast('Logged out successfully', 'info');
@@ -234,35 +258,42 @@
     const fullName = r.fullName || r.name || 'Resident';
     const initials = r.initials || (fullName ? fullName.split(' ').filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'RS');
     
-    let flatStr = r.flat;
-    if (!flatStr) {
-      if (r.blockNumber && r.flatNumber) {
-        flatStr = `${r.blockNumber}-${r.flatNumber}`;
-      } else if (r.flatNumber) {
-        flatStr = r.flatNumber;
-      } else if (r.blockNumber) {
-        flatStr = r.blockNumber;
+    let flatStr = r.flat || '';
+    let blockNum = r.blockNumber;
+    let flatNum = r.flatNumber;
+
+    if (!blockNum || !flatNum) {
+      if (flatStr.includes('-')) {
+        const parts = flatStr.split('-');
+        blockNum = blockNum || parts[0].trim();
+        flatNum = flatNum || parts[1].trim();
       } else {
-        flatStr = '';
+        blockNum = blockNum || 'A';
+        flatNum = flatNum || flatStr || '101';
       }
     }
-    
+
+    if (!flatStr) {
+      flatStr = `${blockNum}-${flatNum}`;
+    }
+
     let statusStr = r.status;
     if (!statusStr) {
       statusStr = (r.active !== false) ? 'Active' : 'Inactive';
     }
 
     return {
-      id: r.id || Date.now(),
+      id: r.id || r.userId || Date.now(),
       name: fullName,
       fullName: fullName,
       initials: initials,
       flat: flatStr,
-      blockNumber: r.blockNumber || (flatStr.includes('-') ? flatStr.split('-')[0] : 'A'),
-      flatNumber: r.flatNumber || (flatStr.includes('-') ? flatStr.split('-')[1] : flatStr),
+      blockNumber: blockNum,
+      flatNumber: flatNum,
       loginId: r.loginId || '',
       phone: r.phone || '',
       backupPhone: r.backupPhone || '',
+      role: r.role || 'RESIDENT',
       status: statusStr,
       active: statusStr === 'Active',
       avatarBg: r.avatarBg || 'blue'
@@ -351,6 +382,41 @@
   }
 
   let wsReconnectTimer = null;
+  let activeResidentSub = null;
+  let activeRoleSub = null;
+
+  function subscribeUserTopics() {
+    if (!state.stompClient || !state.stompClient.connected) return;
+
+    if (activeResidentSub) {
+      try { activeResidentSub.unsubscribe(); } catch(e) {}
+      activeResidentSub = null;
+    }
+    if (activeRoleSub) {
+      try { activeRoleSub.unsubscribe(); } catch(e) {}
+      activeRoleSub = null;
+    }
+
+    if (state.currentUser) {
+      const user = normalizeResident(state.currentUser) || state.currentUser;
+      
+      if (user.role) {
+        activeRoleSub = state.stompClient.subscribe(`/topic/role/${user.role}`, message => {
+          try { handleNotificationEvent(JSON.parse(message.body)); } catch (e) {}
+        });
+      }
+
+      if (user.role === 'RESIDENT') {
+        const block = (user.blockNumber || 'A').toUpperCase();
+        const flat = (user.flatNumber || '101').toUpperCase();
+        const topic = `/topic/resident/${block}-${flat}`;
+        console.log('📡 Subscribed Resident WebSocket Topic:', topic);
+        activeResidentSub = state.stompClient.subscribe(topic, message => {
+          try { handleNotificationEvent(JSON.parse(message.body)); } catch (e) {}
+        });
+      }
+    }
+  }
 
   function connectWebSocket() {
     try {
@@ -386,21 +452,8 @@
             try { handleNotificationEvent(JSON.parse(message.body)); } catch (e) {}
           });
 
-          // 4. Role topic
-          if (state.currentUser && state.currentUser.role) {
-            state.stompClient.subscribe(`/topic/role/${state.currentUser.role}`, message => {
-              try { handleNotificationEvent(JSON.parse(message.body)); } catch (e) {}
-            });
-          }
-
-          // 5. Resident unit topic
-          if (state.currentUser && state.currentUser.role === 'RESIDENT') {
-            const block = state.currentUser.blockNumber || 'A';
-            const flat = state.currentUser.flatNumber || '101';
-            state.stompClient.subscribe(`/topic/resident/${block}-${flat}`, message => {
-              try { handleNotificationEvent(JSON.parse(message.body)); } catch (e) {}
-            });
-          }
+          // 4. Dynamic user role & resident unit topics
+          subscribeUserTopics();
         }, err => {
           console.warn('WebSocket connection lost, auto-reconnecting in 4s...');
           wsReconnectTimer = setTimeout(connectWebSocket, 4000);
@@ -533,7 +586,26 @@
         }
       }
 
+      let isTargetResident = false;
+      if (state.currentUser && (state.currentUser.role === 'RESIDENT' || state.activeView === 'resident')) {
+        const user = normalizeResident(state.currentUser);
+        const uBlock = (user.blockNumber || 'A').toUpperCase();
+        const uFlat = (user.flatNumber || '101').toUpperCase();
+        const uFlatFull = (user.flat || `${uBlock}-${uFlat}`).toUpperCase();
+
+        const evBlock = (event.targetBlock || 'A').toUpperCase();
+        const evFlat = (event.targetFlat || '101').toUpperCase();
+        const evFlatFull = evFlat.includes('-') ? evFlat : `${evBlock}-${evFlat}`;
+
+        isTargetResident = (uFlatFull === evFlatFull) || (uFlat === evFlat) || (uBlock === evBlock && uFlat === evFlat);
+      }
+
       if (event.type === 'VISITOR_NEW' || event.status === 'PENDING') {
+        if (state.currentUser && state.currentUser.role === 'RESIDENT' && !isTargetResident) {
+          render();
+          return;
+        }
+
         showToast(`🔔 ALERT: New Visitor ${event.visitorName || ''} at Gate!`, 'amber');
         playChimeSound();
         showDesktopNotification('🔔 New Visitor at Gate', `Visitor ${event.visitorName || ''} has arrived for Flat ${event.targetBlock || 'A'}-${event.targetFlat || '101'}`);
@@ -549,7 +621,7 @@
         });
 
         // Automatically open live approval modal for logged-in resident
-        if (state.currentUser && (state.currentUser.role === 'RESIDENT' || state.activeView === 'resident')) {
+        if (isTargetResident || (state.currentUser && state.currentUser.role === 'RESIDENT')) {
           const reqId = event.requestId || (state.visitorRequests.length ? state.visitorRequests[0].id : null);
           if (reqId) {
             setTimeout(() => {
@@ -752,7 +824,7 @@
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; font-size:12px;">
                   <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-                    <input type="checkbox"> Remember me
+                    <input type="checkbox" id="remember-me" checked> Remember me
                   </label>
                   <a href="#" onclick="openForgotPasswordModal()" style="color:var(--primary-blue); text-decoration:none; font-weight:600;">Forgot Password?</a>
                 </div>
@@ -1941,6 +2013,9 @@
           return;
         }
 
+        const rememberMeEl = document.getElementById('remember-me');
+        const rememberMe = rememberMeEl ? rememberMeEl.checked : true;
+
         state.isAuthenticating = true;
         render();
 
@@ -1969,7 +2044,7 @@
               mustResetPassword: data.mustResetPassword || false
             };
             saveDatabaseUser({ ...user, password });
-            saveSession(user, data.token || ('token_' + Date.now()));
+            saveSession(user, data.token || ('token_' + Date.now()), rememberMe);
             state.isAuthenticating = false;
             state.activeView = user.role.toLowerCase();
             render();
@@ -2010,7 +2085,7 @@
             return;
           }
 
-          saveSession(matched, 'token_' + Date.now());
+          saveSession(matched, 'token_' + Date.now(), rememberMe);
           state.isAuthenticating = false;
 
           // Check if first-time password reset is required for newly provisioned accounts
