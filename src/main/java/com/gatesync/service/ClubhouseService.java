@@ -1,29 +1,33 @@
 package com.gatesync.service;
 
+import com.gatesync.config.MongoSequenceService;
 import com.gatesync.model.AuditLog;
 import com.gatesync.model.ClubhouseBooking;
 import com.gatesync.model.NotificationCategory;
 import com.gatesync.model.NotificationPriority;
 import com.gatesync.notification.NotificationService;
-import com.gatesync.repository.jpa.AuditLogRepository;
-import com.gatesync.repository.jpa.ClubhouseBookingRepository;
+import com.gatesync.repository.mongo.AuditLogMongoRepository;
+import com.gatesync.repository.mongo.ClubhouseBookingMongoRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ClubhouseService {
 
-    private final ClubhouseBookingRepository clubhouseBookingRepository;
-    private final com.gatesync.repository.mongo.ClubhouseBookingMongoRepository clubhouseBookingMongoRepository;
-    private final AuditLogRepository auditLogRepository;
+    private final ClubhouseBookingMongoRepository clubhouseBookingRepository;
+    private final AuditLogMongoRepository auditLogRepository;
     private final NotificationService notificationService;
+    private final MongoSequenceService sequenceService;
 
-    @Transactional
     public ClubhouseBooking createBooking(ClubhouseBooking booking) {
+        if (booking.getId() == null) {
+            booking.setId(sequenceService.nextId("clubhouse_bookings"));
+        }
         if (booking.getStatus() == null || booking.getStatus().isEmpty()) {
             booking.setStatus("PENDING");
         }
@@ -32,22 +36,18 @@ public class ClubhouseService {
         }
 
         ClubhouseBooking saved = clubhouseBookingRepository.save(booking);
+        log.info("✅ Saved clubhouse booking to MongoDB: {}", saved.getTitle());
 
-        java.util.concurrent.CompletableFuture.runAsync(() -> {
-            try {
-                clubhouseBookingMongoRepository.save(saved);
-                System.out.println("✅ [MongoDB Compass] Saved clubhouse booking: " + saved.getTitle());
-            } catch (Exception e) {
-                System.err.println("❌ [MongoDB Compass Error] " + e.getMessage());
-            }
-        });
-
-        auditLogRepository.save(AuditLog.builder()
-                .actorName(saved.getResidentName() != null ? saved.getResidentName() : "Resident")
-                .actorRole("RESIDENT")
-                .actionCategory("CLUBHOUSE")
-                .description("Submitted Clubhouse Booking request: '" + saved.getTitle() + "' at " + saved.getVenue())
-                .build());
+        try {
+            auditLogRepository.save(AuditLog.builder()
+                    .actorName(saved.getResidentName() != null ? saved.getResidentName() : "Resident")
+                    .actorRole("RESIDENT")
+                    .actionCategory("CLUBHOUSE")
+                    .description("Submitted Clubhouse Booking request: '" + saved.getTitle() + "' at " + saved.getVenue())
+                    .build());
+        } catch (Exception e) {
+            log.warn("Audit log save failed: {}", e.getMessage());
+        }
 
         // Notify admin of new booking
         notificationService.createCategoryNotification(
@@ -71,7 +71,6 @@ public class ClubhouseService {
         return clubhouseBookingRepository.findByResidentNameOrderByCreatedAtDesc(residentName);
     }
 
-    @Transactional
     public ClubhouseBooking updateBookingStatus(Long id, String status, String reason) {
         ClubhouseBooking booking = clubhouseBookingRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Clubhouse booking not found"));
@@ -83,12 +82,16 @@ public class ClubhouseService {
 
         ClubhouseBooking updated = clubhouseBookingRepository.save(booking);
 
-        auditLogRepository.save(AuditLog.builder()
-                .actorName("Admin System")
-                .actorRole("ADMIN")
-                .actionCategory("CLUBHOUSE")
-                .description("Updated Clubhouse Booking ID " + id + " status to " + status)
-                .build());
+        try {
+            auditLogRepository.save(AuditLog.builder()
+                    .actorName("Admin System")
+                    .actorRole("ADMIN")
+                    .actionCategory("CLUBHOUSE")
+                    .description("Updated Clubhouse Booking ID " + id + " status to " + status)
+                    .build());
+        } catch (Exception e) {
+            log.warn("Audit log save failed: {}", e.getMessage());
+        }
 
         // Notify resident of booking decision
         notificationService.createCategoryNotification(

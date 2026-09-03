@@ -4,8 +4,8 @@ import com.gatesync.config.MongoSequenceService;
 import com.gatesync.dto.VisitorDtos.*;
 import com.gatesync.model.*;
 import com.gatesync.notification.NotificationService;
-import com.gatesync.repository.jpa.AuditLogRepository;
-import com.gatesync.repository.jpa.PreApprovedPassRepository;
+import com.gatesync.repository.mongo.AuditLogMongoRepository;
+import com.gatesync.repository.mongo.PreApprovedPassMongoRepository;
 import com.gatesync.repository.mongo.UserMongoRepository;
 import com.gatesync.repository.mongo.VisitorRequestMongoRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,22 +18,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/**
- * VisitorRequest and User lookups are Mongo-only - see AuthService for why (H2 is
- * in-memory and gets wiped on every Render cold start after idle spin-down).
- *
- * PreApprovedPass and AuditLog are intentionally still on H2/JPA for now (out of
- * scope for this fix) - they don't affect the reported "visitor request/account
- * data disappears" symptom.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class VisitorService {
 
     private final VisitorRequestMongoRepository visitorRequestRepository;
-    private final PreApprovedPassRepository preApprovedPassRepository;
-    private final AuditLogRepository auditLogRepository;
+    private final PreApprovedPassMongoRepository preApprovedPassRepository;
+    private final AuditLogMongoRepository auditLogRepository;
     private final UserMongoRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final NotificationService notificationService;

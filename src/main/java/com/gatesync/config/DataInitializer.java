@@ -1,8 +1,7 @@
 package com.gatesync.config;
 
 import com.gatesync.model.*;
-import com.gatesync.repository.jpa.*;
-import com.gatesync.repository.mongo.UserMongoRepository;
+import com.gatesync.repository.mongo.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -10,23 +9,14 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 
-/**
- * The admin seed account is written to Mongo (via UserMongoRepository) since that is
- * now the sole source of truth for User records - see AuthService/AdminService.
- * Checking/seeding against the JPA UserRepository here would seed an account that
- * AuthService can never find, and would re-seed on every restart since H2's count()
- * always resets to 0.
- */
 @Component
 @RequiredArgsConstructor
 public class DataInitializer implements CommandLineRunner {
 
-    private final SocietyRepository societyRepository;
+    private final SocietyMongoRepository societyRepository;
     private final UserMongoRepository userRepository;
-    private final FlatRepository flatRepository;
-    private final VisitorRequestRepository visitorRequestRepository;
-    private final PreApprovedPassRepository preApprovedPassRepository;
-    private final AuditLogRepository auditLogRepository;
+    private final FlatMongoRepository flatRepository;
+    private final AuditLogMongoRepository auditLogRepository;
     private final MongoSequenceService sequenceService;
     private final PasswordEncoder passwordEncoder;
 

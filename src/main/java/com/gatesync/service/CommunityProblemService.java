@@ -1,30 +1,33 @@
 package com.gatesync.service;
 
+import com.gatesync.config.MongoSequenceService;
 import com.gatesync.model.AuditLog;
 import com.gatesync.model.CommunityProblem;
 import com.gatesync.model.NotificationCategory;
 import com.gatesync.model.NotificationPriority;
 import com.gatesync.notification.NotificationService;
-import com.gatesync.repository.jpa.AuditLogRepository;
-import com.gatesync.repository.jpa.CommunityProblemRepository;
+import com.gatesync.repository.mongo.AuditLogMongoRepository;
 import com.gatesync.repository.mongo.CommunityProblemMongoRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CommunityProblemService {
 
-    private final CommunityProblemRepository communityProblemRepository;
-    private final CommunityProblemMongoRepository communityProblemMongoRepository;
-    private final AuditLogRepository auditLogRepository;
+    private final CommunityProblemMongoRepository communityProblemRepository;
+    private final AuditLogMongoRepository auditLogRepository;
     private final NotificationService notificationService;
+    private final MongoSequenceService sequenceService;
 
-    @Transactional
     public CommunityProblem reportProblem(CommunityProblem problem) {
+        if (problem.getId() == null) {
+            problem.setId(sequenceService.nextId("community_problems"));
+        }
         if (problem.getStatus() == null || problem.getStatus().isEmpty()) {
             problem.setStatus("PENDING");
         }
@@ -33,21 +36,18 @@ public class CommunityProblemService {
         }
 
         CommunityProblem saved = communityProblemRepository.save(problem);
-        java.util.concurrent.CompletableFuture.runAsync(() -> {
-            try {
-                communityProblemMongoRepository.save(saved);
-                System.out.println("✅ [MongoDB Compass] Saved community problem: " + saved.getTitle());
-            } catch (Exception e) {
-                System.err.println("❌ [MongoDB Compass Error] " + e.getMessage());
-            }
-        });
+        log.info("✅ Saved community problem to MongoDB: {}", saved.getTitle());
 
-        auditLogRepository.save(AuditLog.builder()
-                .actorName(saved.getReporterName() != null ? saved.getReporterName() : "Resident")
-                .actorRole("RESIDENT")
-                .actionCategory("COMMUNITY_ISSUE")
-                .description("Reported community problem: '" + saved.getTitle() + "' in category " + saved.getCategory())
-                .build());
+        try {
+            auditLogRepository.save(AuditLog.builder()
+                    .actorName(saved.getReporterName() != null ? saved.getReporterName() : "Resident")
+                    .actorRole("RESIDENT")
+                    .actionCategory("COMMUNITY_ISSUE")
+                    .description("Reported community problem: '" + saved.getTitle() + "' in category " + saved.getCategory())
+                    .build());
+        } catch (Exception e) {
+            log.warn("Audit log save failed: {}", e.getMessage());
+        }
 
         // Notify Admin of new complaint
         notificationService.createCategoryNotification(
@@ -67,7 +67,6 @@ public class CommunityProblemService {
         return communityProblemRepository.findBySocietyIdOrderByCreatedAtDesc(effectiveSociety);
     }
 
-    @Transactional
     public CommunityProblem resolveProblem(Long id, String adminReply) {
         CommunityProblem problem = communityProblemRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Community problem not found"));
@@ -81,12 +80,16 @@ public class CommunityProblemService {
 
         CommunityProblem updated = communityProblemRepository.save(problem);
 
-        auditLogRepository.save(AuditLog.builder()
-                .actorName("Admin System")
-                .actorRole("ADMIN")
-                .actionCategory("COMMUNITY_ISSUE")
-                .description("Marked community problem ID " + id + " ('" + updated.getTitle() + "') as RESOLVED")
-                .build());
+        try {
+            auditLogRepository.save(AuditLog.builder()
+                    .actorName("Admin System")
+                    .actorRole("ADMIN")
+                    .actionCategory("COMMUNITY_ISSUE")
+                    .description("Marked community problem ID " + id + " ('" + updated.getTitle() + "') as RESOLVED")
+                    .build());
+        } catch (Exception e) {
+            log.warn("Audit log save failed: {}", e.getMessage());
+        }
 
         // Notify resident/community of resolution
         notificationService.createCategoryNotification(
@@ -101,14 +104,17 @@ public class CommunityProblemService {
         return updated;
     }
 
-    @Transactional
     public void deleteProblem(Long id) {
         communityProblemRepository.deleteById(id);
-        auditLogRepository.save(AuditLog.builder()
-                .actorName("Admin System")
-                .actorRole("ADMIN")
-                .actionCategory("COMMUNITY_ISSUE")
-                .description("Deleted community problem ID " + id)
-                .build());
+        try {
+            auditLogRepository.save(AuditLog.builder()
+                    .actorName("Admin System")
+                    .actorRole("ADMIN")
+                    .actionCategory("COMMUNITY_ISSUE")
+                    .description("Deleted community problem ID " + id)
+                    .build());
+        } catch (Exception e) {
+            log.warn("Audit log save failed: {}", e.getMessage());
+        }
     }
 }

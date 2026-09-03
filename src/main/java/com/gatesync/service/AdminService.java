@@ -3,9 +3,7 @@ package com.gatesync.service;
 import com.gatesync.config.MongoSequenceService;
 import com.gatesync.dto.AdminDtos.*;
 import com.gatesync.model.*;
-import com.gatesync.repository.jpa.*;
-import com.gatesync.repository.mongo.UserMongoRepository;
-import com.gatesync.repository.mongo.VisitorRequestMongoRepository;
+import com.gatesync.repository.mongo.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -14,30 +12,17 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.util.List;
 
-/**
- * User and VisitorRequest reads/writes are Mongo-only - see AuthService for why
- * (H2 is in-memory and gets wiped on every Render cold start after idle spin-down).
- * This is what caused resident/guard accounts created via createUser() to silently
- * disappear.
- *
- * Flat, ClubhouseBooking, CommunityProblem, and AuditLog are intentionally still on
- * H2/JPA for now (out of scope for this fix) - they carry the same latent dual-
- * persistence bug and should get the same treatment, but that wasn't part of the
- * reported symptom (account creation / visitor requests / alerting).
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class AdminService {
 
     private final UserMongoRepository userRepository;
-    private final FlatRepository flatRepository;
+    private final FlatMongoRepository flatRepository;
     private final VisitorRequestMongoRepository visitorRequestRepository;
-    private final com.gatesync.repository.jpa.ClubhouseBookingRepository clubhouseBookingRepository;
-    private final com.gatesync.repository.mongo.ClubhouseBookingMongoRepository clubhouseBookingMongoRepository;
-    private final com.gatesync.repository.jpa.CommunityProblemRepository communityProblemRepository;
-    private final com.gatesync.repository.mongo.CommunityProblemMongoRepository communityProblemMongoRepository;
-    private final AuditLogRepository auditLogRepository;
+    private final ClubhouseBookingMongoRepository clubhouseBookingRepository;
+    private final CommunityProblemMongoRepository communityProblemRepository;
+    private final AuditLogMongoRepository auditLogRepository;
     private final MongoSequenceService sequenceService;
     private final PasswordEncoder passwordEncoder;
 
@@ -97,8 +82,6 @@ public class AdminService {
                 .accountLocked(false)
                 .build();
 
-        // Synchronous save, exception propagates - if this throws, the admin sees
-        // the actual error instead of a fake "account created" response.
         User saved = userRepository.save(user);
         log.info("Saved {} user to MongoDB: {}", saved.getRole(), saved.getLoginId());
 
@@ -110,7 +93,7 @@ public class AdminService {
                     .description("Created new " + role.name() + " account: " + saved.getFullName() + " (" + saved.getLoginId() + ")")
                     .build());
         } catch (Exception e) {
-            log.warn("Audit log write failed on user creation for {}: {}", saved.getLoginId(), e.getMessage());
+            log.warn("Audit log write failed: {}", e.getMessage());
         }
 
         return saved;
@@ -136,18 +119,10 @@ public class AdminService {
             userRepository.deleteAll(nonAdmins);
         }
         visitorRequestRepository.deleteAll();
-
-        try {
-            clubhouseBookingMongoRepository.deleteAll();
-            communityProblemMongoRepository.deleteAll();
-        } catch (Exception e) {
-            log.warn("MongoDB clear exception (clubhouse/community): {}", e.getMessage());
-        }
-
         clubhouseBookingRepository.deleteAll();
         communityProblemRepository.deleteAll();
         auditLogRepository.deleteAll();
 
-        log.info("All resident/guard accounts, visitor requests, and related data cleared.");
+        log.info("All resident/guard accounts, visitor requests, and related data cleared from MongoDB.");
     }
 }
