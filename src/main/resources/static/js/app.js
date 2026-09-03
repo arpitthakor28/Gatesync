@@ -410,10 +410,17 @@
       if (user.role === 'RESIDENT') {
         const block = (user.blockNumber || 'A').toUpperCase();
         const flat = (user.flatNumber || '101').toUpperCase();
-        const topic = `/topic/resident/${block}-${flat}`;
-        console.log('📡 Subscribed Resident WebSocket Topic:', topic);
-        activeResidentSub = state.stompClient.subscribe(topic, message => {
-          try { handleNotificationEvent(JSON.parse(message.body)); } catch (e) {}
+        const residentTopics = [
+          `/topic/resident/${block}-${flat}`,
+          `/topic/resident/${flat}`,
+          user.loginId ? `/topic/resident/${user.loginId}` : null
+        ].filter(Boolean);
+
+        residentTopics.forEach(t => {
+          console.log('📡 Subscribed Resident WebSocket Topic:', t);
+          state.stompClient.subscribe(t, message => {
+            try { handleNotificationEvent(JSON.parse(message.body)); } catch (e) {}
+          });
         });
       }
     }
@@ -534,6 +541,11 @@
 
   function playChimeSound() {
     if (state.soundMuted) return;
+    try {
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate([300, 100, 300, 100, 400]);
+      }
+    } catch (e) {}
     const audio = document.getElementById('alert-sound');
     if (audio) {
       audio.currentTime = 0;
@@ -543,6 +555,11 @@
 
   function playEmergencySound() {
     if (state.soundMuted) return;
+    try {
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate([500, 200, 500, 200, 1000]);
+      }
+    } catch (e) {}
     const audio = document.getElementById('emergency-sound');
     if (audio) {
       audio.currentTime = 0;
@@ -580,14 +597,35 @@
     }
   }
 
+  // Audio & Notification gesture unlock for iOS & Mobile Chrome
+  if (typeof document !== 'undefined') {
+    const unlockMedia = () => {
+      requestWebPushPermission();
+      const a1 = document.getElementById('alert-sound');
+      if (a1) { a1.play().then(() => { a1.pause(); a1.currentTime = 0; }).catch(() => {}); }
+      document.removeEventListener('touchstart', unlockMedia);
+      document.removeEventListener('click', unlockMedia);
+    };
+    document.addEventListener('touchstart', unlockMedia, { once: true });
+    document.addEventListener('click', unlockMedia, { once: true });
+  }
+
   function showDesktopNotification(title, body, icon = null) {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && document.hidden) {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
       try {
-        new Notification(title, {
-          body: body,
-          icon: icon || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=192&auto=format&fit=crop&q=80',
-          badge: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=192&auto=format&fit=crop&q=80'
-        });
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.ready.then(reg => {
+            reg.showNotification(title, {
+              body: body,
+              icon: icon || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=192&auto=format&fit=crop&q=80',
+              vibrate: [300, 100, 300]
+            });
+          }).catch(() => {
+            new Notification(title, { body, icon });
+          });
+        } else {
+          new Notification(title, { body, icon });
+        }
       } catch (e) {}
     }
   }
@@ -652,16 +690,18 @@
 
       let isTargetResident = false;
       if (state.currentUser && (state.currentUser.role === 'RESIDENT' || state.activeView === 'resident')) {
-        const user = normalizeResident(state.currentUser);
-        const uBlock = (user.blockNumber || 'A').toUpperCase();
-        const uFlat = (user.flatNumber || '101').toUpperCase();
-        const uFlatFull = (user.flat || `${uBlock}-${uFlat}`).toUpperCase();
+        const user = normalizeResident(state.currentUser) || state.currentUser;
+        const clean = s => (s || '').toString().toUpperCase().replace(/FLAT/g, '').replace(/[\s\-_]/g, '').trim();
 
-        const evBlock = (event.targetBlock || 'A').toUpperCase();
-        const evFlat = (event.targetFlat || '101').toUpperCase();
-        const evFlatFull = evFlat.includes('-') ? evFlat : `${evBlock}-${evFlat}`;
+        const uFlat = clean(user.flatNumber);
+        const uBlock = clean(user.blockNumber);
+        const uFull = clean(user.flat);
 
-        isTargetResident = (uFlatFull === evFlatFull) || (uFlat === evFlat) || (uBlock === evBlock && uFlat === evFlat);
+        const evFlat = clean(event.targetFlat);
+        const evBlock = clean(event.targetBlock);
+
+        // Match flat if flat numbers match, or block+flat match, or string contains flat number
+        isTargetResident = (uFlat === evFlat) || (uFull === (evBlock + evFlat)) || (uFull === evFlat) || (uFlat && evFlat.includes(uFlat)) || (!evFlat || !uFlat);
       }
 
       if (event.type === 'VISITOR_NEW' || event.status === 'PENDING') {
