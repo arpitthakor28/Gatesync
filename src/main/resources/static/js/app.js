@@ -192,6 +192,7 @@
     loadSavedSession();
     fetchInitialData();
     connectWebSocket();
+    startBackgroundSyncPolling();
     render();
   });
 
@@ -462,6 +463,69 @@
     } catch (e) {
       wsReconnectTimer = setTimeout(connectWebSocket, 5000);
     }
+  }
+
+  let syncIntervalId = null;
+  function startBackgroundSyncPolling() {
+    if (syncIntervalId) clearInterval(syncIntervalId);
+
+    syncIntervalId = setInterval(async () => {
+      if (!state.currentUser || state.activeView === 'landing') return;
+
+      try {
+        const isResident = state.currentUser && state.currentUser.role === 'RESIDENT';
+        const visitorEndpoint = isResident ? '/api/resident/visitors' : '/api/guard/visitors/all';
+
+        const resp = await apiFetch(visitorEndpoint);
+        if (resp && resp.ok) {
+          const freshRequests = await resp.json();
+          if (Array.isArray(freshRequests)) {
+            let stateUpdated = false;
+
+            freshRequests.forEach(fr => {
+              const existing = state.visitorRequests.find(r => r.id === fr.id);
+              if (!existing) {
+                state.visitorRequests.unshift(fr);
+                stateUpdated = true;
+
+                handleNotificationEvent({
+                  type: 'VISITOR_NEW',
+                  requestId: fr.id,
+                  visitorName: fr.visitorName,
+                  visitorPhone: fr.visitorPhone,
+                  purpose: fr.purpose,
+                  targetBlock: fr.targetBlock,
+                  targetFlat: fr.targetFlat,
+                  photoUrl: fr.photoUrl,
+                  status: fr.status,
+                  timestamp: fr.createdAt
+                });
+              } else if (existing.status !== fr.status) {
+                existing.status = fr.status;
+                existing.respondedAt = fr.respondedAt;
+                stateUpdated = true;
+
+                handleNotificationEvent({
+                  type: 'VISITOR_UPDATE',
+                  requestId: fr.id,
+                  visitorName: fr.visitorName,
+                  purpose: fr.purpose,
+                  targetBlock: fr.targetBlock,
+                  targetFlat: fr.targetFlat,
+                  status: fr.status,
+                  timestamp: fr.respondedAt
+                });
+              }
+            });
+
+            if (stateUpdated) {
+              saveVisitorRequestsToStorage();
+              render();
+            }
+          }
+        }
+      } catch (e) {}
+    }, 3500);
   }
 
   function playAlertSound() {
@@ -2249,12 +2313,11 @@
         };
 
         try {
-          const resp = await fetch('/api/guard/visitor/register', {
+          const resp = await apiFetch('/api/guard/visitor/register', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
-          if (resp.ok) {
+          if (resp && resp.ok) {
             const data = await resp.json();
             if (data && data.id) newReq.id = data.id;
           }
@@ -2473,9 +2536,8 @@
         });
       }
       try {
-        await fetch('/api/resident/visitor/respond', {
+        await apiFetch('/api/resident/visitor/respond', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ requestId, status: 'APPROVED' })
         });
       } catch (e) {}
@@ -2531,9 +2593,8 @@
         });
       }
       try {
-        await fetch('/api/resident/visitor/respond', {
+        await apiFetch('/api/resident/visitor/respond', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ requestId, status: 'DENIED', denialReason })
         });
       } catch (e) {}
@@ -3758,11 +3819,9 @@
 
     closeModal();
 
-    fetch('/api/notifications/announcements', {
+    apiFetch('/api/notifications/announcements', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + (state.token || ''),
         'X-User-Name': state.currentUser ? state.currentUser.fullName : 'Admin'
       },
       body: JSON.stringify({
