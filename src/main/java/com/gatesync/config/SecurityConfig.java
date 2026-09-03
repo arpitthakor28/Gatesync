@@ -47,7 +47,9 @@ public class SecurityConfig {
                     "/api/auth/register-admin",
                     "/api/auth/forgot-password",
                     "/api/auth/reset-password",
-                    "/api/health"
+                    "/api/health",
+                    "/health",
+                    "/ping"
                 ).permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/guard/**").hasRole("GUARD")

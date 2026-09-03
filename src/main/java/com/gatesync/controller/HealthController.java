@@ -13,7 +13,7 @@ import java.util.Map;
 @CrossOrigin(origins = "*")
 public class HealthController {
 
-    @GetMapping("/api/health")
+    @GetMapping({"/api/health", "/health", "/ping"})
     public ResponseEntity<Map<String, Object>> healthCheck() {
         Map<String, Object> response = new HashMap<>();
         response.put("status", "OK");
