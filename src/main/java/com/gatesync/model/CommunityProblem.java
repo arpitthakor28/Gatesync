@@ -24,6 +24,10 @@ public class CommunityProblem {
 
     private String reporterName;
     private String flat;
+
+    public String getReporterFlat() {
+        return flat;
+    }
     private String title;
     private String category; // Water, Power, Security, Lift, Cleanliness, Noise, Other
     private String priority; // Low, Medium, High

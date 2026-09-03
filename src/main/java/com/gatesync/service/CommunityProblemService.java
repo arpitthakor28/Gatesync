@@ -95,7 +95,7 @@ public class CommunityProblemService {
                 NotificationCategory.COMPLAINT,
                 NotificationPriority.NORMAL,
                 "RESIDENT",
-                updated.getReporterFlat()
+                updated.getFlat()
         );
 
         return updated;
