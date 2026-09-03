@@ -49,6 +49,7 @@ public class AuthDtos {
     @AllArgsConstructor
     public static class PasswordResetRequest {
         private Long userId;
+        private String username;
         private String currentPassword;
         private String newPassword;
     }

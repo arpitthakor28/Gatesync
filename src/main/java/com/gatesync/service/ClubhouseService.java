@@ -52,7 +52,7 @@ public class ClubhouseService {
         // Notify admin of new booking
         notificationService.createCategoryNotification(
                 "🎉 New Clubhouse Booking Request",
-                (saved.getResidentName() != null ? saved.getResidentName() : "Resident") + " requested " + saved.getVenue() + " for '" + saved.getTitle() + "' on " + saved.getBookingDate(),
+                (saved.getResidentName() != null ? saved.getResidentName() : "Resident") + " requested " + saved.getVenue() + " for '" + saved.getTitle() + "' on " + saved.getDate(),
                 NotificationCategory.CLUBHOUSE,
                 NotificationPriority.NORMAL,
                 "ADMIN",
@@ -97,7 +97,7 @@ public class ClubhouseService {
                 NotificationCategory.CLUBHOUSE,
                 NotificationPriority.NORMAL,
                 "RESIDENT",
-                updated.getResidentFlat()
+                updated.getFlat()
         );
 
         return updated;

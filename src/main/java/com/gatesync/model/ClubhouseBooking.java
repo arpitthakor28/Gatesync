@@ -24,10 +24,19 @@ public class ClubhouseBooking {
 
     private String residentName;
     private String flat;
+
+    public String getResidentFlat() {
+        return flat;
+    }
+
     private String title;
     private String type; // Birthday, Meeting, Festival, Family Function, Other
     private String venue; // Clubhouse Hall, Main Lawn, Rooftop Terrace, Poolside Deck
     private String date;
+
+    public String getBookingDate() {
+        return date;
+    }
     private String startTime;
     private String endTime;
     private int guests;
