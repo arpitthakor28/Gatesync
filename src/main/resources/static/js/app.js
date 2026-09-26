@@ -20,15 +20,11 @@
     isAuthenticating: false,
     isRefreshing: false,
     notificationDrawerOpen: false,
-    notificationFilter: 'ALL',
-    activeEmergency: null,
-    soundMuted: false,
-    webPushPermission: (typeof Notification !== 'undefined' ? Notification.permission : 'default'),
     selectedPhoto: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80',
     cameraStream: null,
     stompClient: null,
     
-    // Notifications Feed
+    // Notifications Feed (Reset to Zero)
     notifications: [],
 
     // Clubhouse Bookings Module (Reset to Zero)
@@ -97,52 +93,20 @@
   function saveVisitorRequestsToStorage() {
     try {
       localStorage.setItem('gatesync_visitor_requests', JSON.stringify(state.visitorRequests));
-  function broadcastSyncEvent(eventType, payload) {
-    try {
       if (window.gatesyncChannel) {
-        window.gatesyncChannel.postMessage({ type: eventType, payload: payload, requests: state.visitorRequests, notifications: state.notifications, emergency: state.activeEmergency });
+        window.gatesyncChannel.postMessage({ type: 'SYNC_VISITORS', requests: state.visitorRequests });
       }
-    } catch (e) {}
-  }
-
-  function saveNotificationsToStorage() {
-    try {
-      localStorage.setItem('gatesync_notifications', JSON.stringify(state.notifications));
-      broadcastSyncEvent('SYNC_NOTIFICATIONS', state.notifications);
-    } catch (e) {}
-  }
-
-  function loadNotificationsFromStorage() {
-    try {
-      const stored = localStorage.getItem('gatesync_notifications');
-      if (stored) state.notifications = JSON.parse(stored);
     } catch (e) {}
   }
 
   if (typeof BroadcastChannel !== 'undefined') {
     window.gatesyncChannel = new BroadcastChannel('gatesync_sync_channel');
     window.gatesyncChannel.onmessage = (evt) => {
-      if (!evt.data) return;
-      const { type, payload, requests, notifications, emergency } = evt.data;
-
-      if (type === 'SYNC_VISITORS') {
-        state.visitorRequests = requests || [];
+      if (evt.data && evt.data.type === 'SYNC_VISITORS') {
+        state.visitorRequests = evt.data.requests || [];
         render();
-      } else if (type === 'SYNC_NOTIFICATIONS') {
-        state.notifications = notifications || [];
-        render();
-      } else if (type === 'SYNC_EMERGENCY_SOS') {
-        state.activeEmergency = emergency;
-        if (emergency && emergency.status === 'ACTIVE') {
-          playEmergencySound();
-          showToast(`🚨 EMERGENCY SOS: ${emergency.emergencyType} reported by ${emergency.callerName}`, 'emergency');
-        } else {
-          stopEmergencySound();
-        }
-        renderEmergencyBanner();
-        render();
-      } else if (type === 'VISITOR_EVENT') {
-        handleNotificationEvent(payload);
+      } else if (evt.data && evt.data.type === 'VISITOR_EVENT') {
+        handleNotificationEvent(evt.data.payload);
       }
     };
   }
@@ -154,6 +118,7 @@
         const newReqs = JSON.parse(e.newValue) || [];
         state.visitorRequests = newReqs;
 
+        // Check if a new pending visitor entry was submitted by Guard
         const newlyAdded = newReqs.find(nr => !oldReqs.some(or => or.id === nr.id) && nr.status === 'PENDING');
         if (newlyAdded) {
           handleNotificationEvent({
@@ -164,19 +129,6 @@
             purpose: newlyAdded.purpose,
             targetFlat: newlyAdded.targetFlat,
             targetBlock: newlyAdded.targetBlock,
-            photoUrl: newlyAdded.photoUrl,
-            status: newlyAdded.status,
-            timestamp: newlyAdded.createdAt
-          });
-        }
-      } catch (err) {}
-    } else if (e.key === 'gatesync_notifications' && e.newValue) {
-      try {
-        state.notifications = JSON.parse(e.newValue) || [];
-        render();
-      } catch (err) {}
-    }
-  });
             photoUrl: newlyAdded.photoUrl,
             status: 'PENDING'
           });
@@ -192,24 +144,18 @@
     loadSavedSession();
     fetchInitialData();
     connectWebSocket();
-    startBackgroundSyncPolling();
     render();
   });
 
   function loadSavedSession() {
-    let savedUser = localStorage.getItem('gatesync_user');
-    let savedToken = localStorage.getItem('gatesync_token');
-    if (!savedUser) {
-      savedUser = sessionStorage.getItem('gatesync_user');
-      savedToken = sessionStorage.getItem('gatesync_token');
-    }
+    const savedUser = localStorage.getItem('gatesync_user');
+    const savedToken = localStorage.getItem('gatesync_token') || 'token_pwa_session';
     if (savedUser) {
       try {
         const user = JSON.parse(savedUser);
         if (user && user.role) {
-          const normalized = normalizeResident(user) || user;
-          state.currentUser = normalized;
-          state.token = savedToken || 'token_pwa_session';
+          state.currentUser = user;
+          state.token = savedToken;
           state.activeView = user.role.toLowerCase();
           return;
         }
@@ -218,25 +164,25 @@
     state.activeView = 'landing';
   }
 
-  function saveSession(user, token, rememberMe = true) {
-    const normalizedUser = normalizeResident(user) || user;
-    state.currentUser = normalizedUser;
+  function saveSession(user, token) {
+    state.currentUser = user;
     state.token = token;
+    localStorage.setItem('gatesync_user', JSON.stringify(user));
+    localStorage.setItem('gatesync_token', token);
+    requestNotificationPermission();
 
-    if (rememberMe) {
-      localStorage.setItem('gatesync_user', JSON.stringify(normalizedUser));
-      localStorage.setItem('gatesync_token', token);
-      sessionStorage.removeItem('gatesync_user');
-      sessionStorage.removeItem('gatesync_token');
-    } else {
-      sessionStorage.setItem('gatesync_user', JSON.stringify(normalizedUser));
-      sessionStorage.setItem('gatesync_token', token);
-      localStorage.removeItem('gatesync_user');
-      localStorage.removeItem('gatesync_token');
-    }
-
+    // connectWebSocket() runs once at page load, BEFORE login, when currentUser is
+    // still null - so it only ever subscribes to the guard queue and never to this
+    // resident's own flat topic. Without this reconnect, a resident logging in
+    // fresh (not restoring a saved session) never subscribes to their alerts at
+    // all - only a page reload after login happened to work, because
+    // loadSavedSession sets currentUser before connectWebSocket runs.
     if (state.stompClient && state.stompClient.connected) {
-      subscribeUserTopics();
+      try {
+        state.stompClient.disconnect(() => connectWebSocket());
+      } catch (e) {
+        connectWebSocket();
+      }
     } else {
       connectWebSocket();
     }
@@ -247,8 +193,6 @@
     state.token = null;
     localStorage.removeItem('gatesync_user');
     localStorage.removeItem('gatesync_token');
-    sessionStorage.removeItem('gatesync_user');
-    sessionStorage.removeItem('gatesync_token');
     state.activeView = 'landing';
     render();
     showToast('Logged out successfully', 'info');
@@ -259,42 +203,35 @@
     const fullName = r.fullName || r.name || 'Resident';
     const initials = r.initials || (fullName ? fullName.split(' ').filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'RS');
     
-    let flatStr = r.flat || '';
-    let blockNum = r.blockNumber;
-    let flatNum = r.flatNumber;
-
-    if (!blockNum || !flatNum) {
-      if (flatStr.includes('-')) {
-        const parts = flatStr.split('-');
-        blockNum = blockNum || parts[0].trim();
-        flatNum = flatNum || parts[1].trim();
+    let flatStr = r.flat;
+    if (!flatStr) {
+      if (r.blockNumber && r.flatNumber) {
+        flatStr = `${r.blockNumber}-${r.flatNumber}`;
+      } else if (r.flatNumber) {
+        flatStr = r.flatNumber;
+      } else if (r.blockNumber) {
+        flatStr = r.blockNumber;
       } else {
-        blockNum = blockNum || 'A';
-        flatNum = flatNum || flatStr || '101';
+        flatStr = '';
       }
     }
-
-    if (!flatStr) {
-      flatStr = `${blockNum}-${flatNum}`;
-    }
-
+    
     let statusStr = r.status;
     if (!statusStr) {
       statusStr = (r.active !== false) ? 'Active' : 'Inactive';
     }
 
     return {
-      id: r.id || r.userId || Date.now(),
+      id: r.id || Date.now(),
       name: fullName,
       fullName: fullName,
       initials: initials,
       flat: flatStr,
-      blockNumber: blockNum,
-      flatNumber: flatNum,
+      blockNumber: r.blockNumber || (flatStr.includes('-') ? flatStr.split('-')[0] : 'A'),
+      flatNumber: r.flatNumber || (flatStr.includes('-') ? flatStr.split('-')[1] : flatStr),
       loginId: r.loginId || '',
       phone: r.phone || '',
       backupPhone: r.backupPhone || '',
-      role: r.role || 'RESIDENT',
       status: statusStr,
       active: statusStr === 'Active',
       avatarBg: r.avatarBg || 'blue'
@@ -382,411 +319,177 @@
     render();
   }
 
+  // Reconnect backoff state - without this, one dropped connection (screen lock,
+  // background tab, brief network blip) means the resident gets zero alerts until
+  // they manually reload the page.
+  let wsReconnectAttempts = 0;
   let wsReconnectTimer = null;
-  let activeResidentSub = null;
-  let activeRoleSub = null;
-
-  function subscribeUserTopics() {
-    if (!state.stompClient || !state.stompClient.connected) return;
-
-    if (activeResidentSub) {
-      try { activeResidentSub.unsubscribe(); } catch(e) {}
-      activeResidentSub = null;
-    }
-    if (activeRoleSub) {
-      try { activeRoleSub.unsubscribe(); } catch(e) {}
-      activeRoleSub = null;
-    }
-
-    if (state.currentUser) {
-      const user = normalizeResident(state.currentUser) || state.currentUser;
-      
-      if (user.role) {
-        activeRoleSub = state.stompClient.subscribe(`/topic/role/${user.role}`, message => {
-          try { handleNotificationEvent(JSON.parse(message.body)); } catch (e) {}
-        });
-      }
-
-      if (user.role === 'RESIDENT') {
-        const block = (user.blockNumber || 'A').toUpperCase();
-        const flat = (user.flatNumber || '101').toUpperCase();
-        const residentTopics = [
-          `/topic/resident/${block}-${flat}`,
-          `/topic/resident/${flat}`,
-          user.loginId ? `/topic/resident/${user.loginId}` : null
-        ].filter(Boolean);
-
-        residentTopics.forEach(t => {
-          console.log('📡 Subscribed Resident WebSocket Topic:', t);
-          state.stompClient.subscribe(t, message => {
-            try { handleNotificationEvent(JSON.parse(message.body)); } catch (e) {}
-          });
-        });
-      }
-    }
-  }
 
   function connectWebSocket() {
     try {
-      if (typeof SockJS !== 'undefined' && typeof Stomp !== 'undefined') {
-        const socket = new SockJS('/ws-gatesync');
-        state.stompClient = Stomp.over(socket);
-        state.stompClient.debug = null;
+      if (typeof SockJS === 'undefined' || typeof Stomp === 'undefined') {
+        console.error('GateSync: SockJS/Stomp not loaded - live alerts cannot work at all.');
+        return;
+      }
 
-        const connectHeaders = {};
-        if (state.token) {
-          connectHeaders['Authorization'] = 'Bearer ' + state.token;
-        }
+      if (state.currentUser && state.currentUser.role === 'RESIDENT'
+          && (!state.currentUser.blockNumber || !state.currentUser.flatNumber)) {
+        // Previously this silently fell back to block A / flat 101, which meant a
+        // resident with an incomplete profile would receive OTHER flats' visitor
+        // alerts and never receive their own. Surface it instead of hiding it.
+        console.error('GateSync: resident profile is missing blockNumber/flatNumber - ' +
+          'cannot subscribe to the correct alert topic. Fix the account\'s block/flat, ' +
+          'not this fallback.');
+        showToast('Your account is missing a flat number - alerts cannot reach you. Contact admin.', 'error');
+      }
 
-        state.stompClient.connect(connectHeaders, () => {
+      const socket = new SockJS('/ws-gatesync');
+      state.stompClient = Stomp.over(socket);
+      state.stompClient.debug = null;
+
+      const connectHeaders = {};
+      if (state.token) {
+        connectHeaders['Authorization'] = 'Bearer ' + state.token;
+      }
+
+      state.stompClient.connect(
+        connectHeaders,
+        () => {
           console.log('Connected to GateSync WebSocket Broker.');
+          wsReconnectAttempts = 0;
           if (wsReconnectTimer) {
             clearTimeout(wsReconnectTimer);
             wsReconnectTimer = null;
           }
 
-          // 1. Guard queue topic
           state.stompClient.subscribe('/topic/guard/queue', message => {
-            try { handleNotificationEvent(JSON.parse(message.body)); } catch (e) {}
+            const event = JSON.parse(message.body);
+            handleNotificationEvent(event);
           });
-
-          // 2. Emergency SOS topic
-          state.stompClient.subscribe('/topic/emergency/sos', message => {
-            try { handleNotificationEvent(JSON.parse(message.body)); } catch (e) {}
-          });
-
-          // 3. Society Broadcast topic
-          state.stompClient.subscribe('/topic/society/broadcast', message => {
-            try { handleNotificationEvent(JSON.parse(message.body)); } catch (e) {}
-          });
-
-          // 4. Dynamic user role & resident unit topics
-          subscribeUserTopics();
-        }, err => {
-          console.warn('WebSocket connection lost, auto-reconnecting in 4s...');
-          wsReconnectTimer = setTimeout(connectWebSocket, 4000);
-        });
-      }
-    } catch (e) {
-      wsReconnectTimer = setTimeout(connectWebSocket, 5000);
-    }
-  }
-
-  let syncIntervalId = null;
-  function startBackgroundSyncPolling() {
-    if (syncIntervalId) clearInterval(syncIntervalId);
-
-    syncIntervalId = setInterval(async () => {
-      if (!state.currentUser || state.activeView === 'landing') return;
-
-      try {
-        const isResident = state.currentUser && state.currentUser.role === 'RESIDENT';
-        const visitorEndpoint = isResident ? '/api/resident/visitors' : '/api/guard/visitors/all';
-
-        const resp = await apiFetch(visitorEndpoint);
-        if (resp && resp.ok) {
-          const freshRequests = await resp.json();
-          if (Array.isArray(freshRequests)) {
-            let stateUpdated = false;
-
-            freshRequests.forEach(fr => {
-              const existing = state.visitorRequests.find(r => r.id === fr.id);
-              if (!existing) {
-                state.visitorRequests.unshift(fr);
-                stateUpdated = true;
-
-                handleNotificationEvent({
-                  type: 'VISITOR_NEW',
-                  requestId: fr.id,
-                  visitorName: fr.visitorName,
-                  visitorPhone: fr.visitorPhone,
-                  purpose: fr.purpose,
-                  targetBlock: fr.targetBlock,
-                  targetFlat: fr.targetFlat,
-                  photoUrl: fr.photoUrl,
-                  status: fr.status,
-                  timestamp: fr.createdAt
-                });
-              } else if (existing.status !== fr.status) {
-                existing.status = fr.status;
-                existing.respondedAt = fr.respondedAt;
-                stateUpdated = true;
-
-                handleNotificationEvent({
-                  type: 'VISITOR_UPDATE',
-                  requestId: fr.id,
-                  visitorName: fr.visitorName,
-                  purpose: fr.purpose,
-                  targetBlock: fr.targetBlock,
-                  targetFlat: fr.targetFlat,
-                  status: fr.status,
-                  timestamp: fr.respondedAt
-                });
-              }
+          if (state.currentUser && state.currentUser.role === 'RESIDENT'
+              && state.currentUser.blockNumber && state.currentUser.flatNumber) {
+            const block = state.currentUser.blockNumber;
+            const flat = state.currentUser.flatNumber;
+            state.stompClient.subscribe(`/topic/resident/${block}-${flat}`, message => {
+              const event = JSON.parse(message.body);
+              handleNotificationEvent(event);
             });
-
-            if (stateUpdated) {
-              saveVisitorRequestsToStorage();
-              render();
-            }
           }
+        },
+        (error) => {
+          // STOMP error callback fires on connection failure AND on unexpected
+          // disconnect - reconnect with capped exponential backoff instead of
+          // going silent.
+          console.error('GateSync WebSocket connection lost/failed:', error);
+          scheduleWebSocketReconnect();
         }
-      } catch (e) {}
-    }, 3500);
-  }
-
-  function playAlertSound() {
-    playChimeSound();
-  }
-
-  function playChimeSound() {
-    if (state.soundMuted) return;
-    try {
-      if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate([300, 100, 300, 100, 400]);
-      }
-    } catch (e) {}
-    const audio = document.getElementById('alert-sound');
-    if (audio) {
-      audio.currentTime = 0;
-      audio.play().catch(() => {});
+      );
+    } catch (e) {
+      console.error('GateSync: connectWebSocket threw an exception:', e);
+      scheduleWebSocketReconnect();
     }
   }
 
-  function playEmergencySound() {
-    if (state.soundMuted) return;
-    try {
-      if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate([500, 200, 500, 200, 1000]);
-      }
-    } catch (e) {}
-    const audio = document.getElementById('emergency-sound');
-    if (audio) {
-      audio.currentTime = 0;
-      audio.play().catch(() => {});
-    }
+  function scheduleWebSocketReconnect() {
+    if (wsReconnectTimer) return; // already scheduled
+    wsReconnectAttempts++;
+    const delayMs = Math.min(30000, 1000 * Math.pow(2, wsReconnectAttempts)); // cap at 30s
+    console.log(`GateSync: reconnecting WebSocket in ${delayMs / 1000}s (attempt ${wsReconnectAttempts})`);
+    wsReconnectTimer = setTimeout(() => {
+      wsReconnectTimer = null;
+      connectWebSocket();
+    }, delayMs);
   }
 
-  function stopEmergencySound() {
-    const audio = document.getElementById('emergency-sound');
-    if (audio) {
-      audio.pause();
-      audio.currentTime = 0;
-    }
-  }
-
-  window.toggleSoundMute = function() {
-    state.soundMuted = !state.soundMuted;
-    if (state.soundMuted) {
-      stopEmergencySound();
-      showToast('🔇 Audio alert sound muted', 'info');
-    } else {
-      showToast('🔊 Audio alert sound enabled', 'info');
-    }
-    render();
-  };
-
-  function requestWebPushPermission() {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-      Notification.requestPermission().then(permission => {
-        state.webPushPermission = permission;
-        if (permission === 'granted') {
-          showToast('🔔 Browser push notifications enabled', 'success');
-        }
-      });
-    }
-  }
-
-  // Audio & Notification gesture unlock for iOS & Mobile Chrome
+  // Mobile browsers suspend background tabs and drop the WebSocket without firing
+  // a clean STOMP error callback. Force a reconnect check whenever the tab becomes
+  // visible again (e.g. resident unlocks their phone) instead of waiting on backoff.
   if (typeof document !== 'undefined') {
-    const unlockMedia = () => {
-      requestWebPushPermission();
-      const a1 = document.getElementById('alert-sound');
-      if (a1) { a1.play().then(() => { a1.pause(); a1.currentTime = 0; }).catch(() => {}); }
-      document.removeEventListener('touchstart', unlockMedia);
-      document.removeEventListener('click', unlockMedia);
-    };
-    document.addEventListener('touchstart', unlockMedia, { once: true });
-    document.addEventListener('click', unlockMedia, { once: true });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        const connected = state.stompClient && state.stompClient.connected;
+        if (!connected) {
+          console.log('GateSync: tab became visible and WebSocket is disconnected - reconnecting now.');
+          wsReconnectAttempts = 0;
+          if (wsReconnectTimer) {
+            clearTimeout(wsReconnectTimer);
+            wsReconnectTimer = null;
+          }
+          connectWebSocket();
+        }
+      }
+    });
   }
 
-  function showDesktopNotification(title, body, icon = null) {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-      try {
-        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-          navigator.serviceWorker.ready.then(reg => {
-            reg.showNotification(title, {
-              body: body,
-              icon: icon || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=192&auto=format&fit=crop&q=80',
-              vibrate: [300, 100, 300]
-            });
-          }).catch(() => {
-            new Notification(title, { body, icon });
-          });
-        } else {
-          new Notification(title, { body, icon });
-        }
-      } catch (e) {}
+  // Ask once, on a real user gesture context (called from login success), not on
+  // page load - browsers ignore/auto-deny permission requests fired on load.
+  function requestNotificationPermission() {
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
     }
   }
 
-  function pushNotificationItem(item) {
-    if (!state.notifications) state.notifications = [];
-    state.notifications.unshift(item);
-    saveNotificationsToStorage();
+  // This is NOT background push - it only fires while this tab's JS is still
+  // running (tab open, even if minimized/unfocused). It does not work if the tab
+  // is fully closed or the phone browser has suspended it - that requires FCM +
+  // a service worker push handler, which this codebase does not implement yet.
+  function showNativeNotification(title, body) {
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission !== 'granted') return;
+    if (document.visibilityState === 'visible' && document.hasFocus()) return; // toast is enough when tab is active
+    try {
+      new Notification(title, { body, icon: '/manifest.json' });
+    } catch (e) {
+      console.error('GateSync: failed to show native notification', e);
+    }
   }
 
   function handleNotificationEvent(event) {
     if (!event) return;
 
-    // 1. Emergency SOS Panic Event
-    if (event.type === 'EMERGENCY_SOS' || event.category === 'EMERGENCY_SOS') {
-      const emergency = event.payload || event;
-      state.activeEmergency = emergency;
-      playEmergencySound();
-      showDesktopNotification('🚨 EMERGENCY SOS ALERT', `${emergency.emergencyType || 'General Emergency'} reported by ${emergency.callerName || 'Resident'}`);
-      showToast(`🚨 CRITICAL EMERGENCY SOS: ${emergency.emergencyType || 'General'}!`, 'emergency');
-
-      pushNotificationItem({
-        id: event.id || Date.now(),
-        title: `🚨 EMERGENCY: ${emergency.emergencyType || 'General'}`,
-        message: `Panic alert by ${emergency.callerName || 'User'} (${emergency.blockNumber ? 'Flat ' + emergency.blockNumber + '-' + emergency.flatNumber : 'Gate'})`,
-        category: 'EMERGENCY_SOS',
-        priority: 'CRITICAL',
-        read: false,
-        time: 'Just now'
-      });
-
-      broadcastSyncEvent('SYNC_EMERGENCY_SOS', emergency);
-      renderEmergencyBanner();
-      render();
-      return;
+    if (event.requestId) {
+      const existing = state.visitorRequests.find(r => r.id === event.requestId);
+      if (!existing && (event.type === 'VISITOR_NEW' || event.status === 'PENDING')) {
+        const newReq = {
+          id: event.requestId,
+          visitorName: event.visitorName,
+          visitorPhone: event.visitorPhone || 'N/A',
+          purpose: event.purpose,
+          targetFlat: event.targetFlat,
+          targetBlock: event.targetBlock,
+          photoUrl: event.photoUrl || PRESET_PHOTOS[0].url,
+          status: event.status || 'PENDING',
+          timeAgo: 'Just now',
+          createdAt: event.timestamp || new Date().toISOString()
+        };
+        state.visitorRequests.unshift(newReq);
+        saveVisitorRequestsToStorage();
+      } else if (existing && (event.type === 'VISITOR_UPDATE' || event.status)) {
+        existing.status = event.status;
+        saveVisitorRequestsToStorage();
+      }
     }
 
-    // 2. Visitor Event
-    if (event.requestId || event.type === 'VISITOR_NEW' || event.type === 'VISITOR_UPDATE') {
-      if (event.requestId) {
-        const existing = state.visitorRequests.find(r => r.id === event.requestId);
-        if (!existing && (event.type === 'VISITOR_NEW' || event.status === 'PENDING')) {
-          const newReq = {
-            id: event.requestId,
-            visitorName: event.visitorName,
-            visitorPhone: event.visitorPhone || 'N/A',
-            purpose: event.purpose,
-            targetFlat: event.targetFlat,
-            targetBlock: event.targetBlock,
-            photoUrl: event.photoUrl || PRESET_PHOTOS[0].url,
-            status: event.status || 'PENDING',
-            timeAgo: 'Just now',
-            createdAt: event.timestamp || new Date().toISOString()
-          };
-          state.visitorRequests.unshift(newReq);
-          saveVisitorRequestsToStorage();
-        } else if (existing && (event.type === 'VISITOR_UPDATE' || event.status)) {
-          existing.status = event.status;
-          saveVisitorRequestsToStorage();
-        }
-      }
+    if (event.type === 'VISITOR_NEW' || event.status === 'PENDING') {
+      showToast(`🔔 ALERT: New Visitor ${event.visitorName || ''} at Gate!`, 'amber');
+      playAlertSound();
+      showNativeNotification('GateSync: New Visitor', `${event.visitorName || 'A visitor'} is waiting at the gate.`);
 
-      let isTargetResident = false;
+      // Automatically open live approval modal for logged-in resident
       if (state.currentUser && (state.currentUser.role === 'RESIDENT' || state.activeView === 'resident')) {
-        const user = normalizeResident(state.currentUser) || state.currentUser;
-        const clean = s => (s || '').toString().toUpperCase().replace(/FLAT/g, '').replace(/[\s\-_]/g, '').trim();
-
-        const uFlat = clean(user.flatNumber);
-        const uBlock = clean(user.blockNumber);
-        const uFull = clean(user.flat);
-
-        const evFlat = clean(event.targetFlat);
-        const evBlock = clean(event.targetBlock);
-
-        // Match flat if flat numbers match, or block+flat match, or string contains flat number
-        isTargetResident = (uFlat === evFlat) || (uFull === (evBlock + evFlat)) || (uFull === evFlat) || (uFlat && evFlat.includes(uFlat)) || (!evFlat || !uFlat);
-      }
-
-      if (event.type === 'VISITOR_NEW' || event.status === 'PENDING') {
-        if (state.currentUser && state.currentUser.role === 'RESIDENT' && !isTargetResident) {
-          render();
-          return;
+        const reqId = event.requestId || (state.visitorRequests.length ? state.visitorRequests[0].id : null);
+        if (reqId) {
+          setTimeout(() => {
+            if (typeof window.openApproveModal === 'function') {
+              window.openApproveModal(reqId);
+            }
+          }, 150);
         }
-
-        showToast(`🔔 ALERT: New Visitor ${event.visitorName || ''} at Gate!`, 'amber');
-        playChimeSound();
-        showDesktopNotification('🔔 New Visitor at Gate', `Visitor ${event.visitorName || ''} has arrived for Flat ${event.targetBlock || 'A'}-${event.targetFlat || '101'}`);
-
-        pushNotificationItem({
-          id: Date.now(),
-          title: `🔔 Visitor Arrival: ${event.visitorName || 'Guest'}`,
-          message: `Arrived at gate for Flat ${event.targetBlock || 'A'}-${event.targetFlat || '101'}.`,
-          category: 'VISITOR',
-          priority: 'HIGH',
-          read: false,
-          time: 'Just now'
-        });
-
-        // Automatically open live approval modal for logged-in resident
-        if (isTargetResident || (state.currentUser && state.currentUser.role === 'RESIDENT')) {
-          const reqId = event.requestId || (state.visitorRequests.length ? state.visitorRequests[0].id : null);
-          if (reqId) {
-            setTimeout(() => {
-              if (typeof window.openApproveModal === 'function') {
-                window.openApproveModal(reqId);
-              }
-            }, 150);
-          }
-        }
-      } else if (event.type === 'VISITOR_UPDATE') {
-        showToast(`Visitor status updated to ${event.status} for ${event.visitorName}`, event.status === 'APPROVED' ? 'success' : 'error');
-        pushNotificationItem({
-          id: Date.now(),
-          title: `Visitor ${event.status}: ${event.visitorName || ''}`,
-          message: `Visitor status changed to ${event.status}.`,
-          category: 'VISITOR',
-          priority: 'NORMAL',
-          read: false,
-          time: 'Just now'
-        });
       }
+    } else if (event.type === 'VISITOR_UPDATE') {
+      showToast(`Visitor status updated to ${event.status} for ${event.visitorName}`, event.status === 'APPROVED' ? 'success' : 'error');
     }
-
-    // 3. Announcement / Complaint / Clubhouse events
-    if (event.type === 'ANNOUNCEMENT' || event.category === 'ANNOUNCEMENT') {
-      showToast(`📢 ${event.title || 'Announcement'}: ${event.message || ''}`, 'announcement');
-      playChimeSound();
-      showDesktopNotification(`📢 ${event.title || 'Announcement'}`, event.message || '');
-      pushNotificationItem({
-        id: event.id || Date.now(),
-        title: event.title || '📢 Announcement',
-        message: event.message,
-        category: 'ANNOUNCEMENT',
-        priority: 'HIGH',
-        read: false,
-        time: 'Just now'
-      });
-    } else if (event.category === 'COMPLAINT') {
-      showToast(`⚠️ ${event.title || 'Complaint Update'}`, 'info');
-      pushNotificationItem({
-        id: event.id || Date.now(),
-        title: event.title || 'Complaint Alert',
-        message: event.message,
-        category: 'COMPLAINT',
-        priority: 'NORMAL',
-        read: false,
-        time: 'Just now'
-      });
-    } else if (event.category === 'CLUBHOUSE') {
-      showToast(`🎉 ${event.title || 'Booking Update'}`, 'success');
-      pushNotificationItem({
-        id: event.id || Date.now(),
-        title: event.title || 'Clubhouse Booking',
-        message: event.message,
-        category: 'CLUBHOUSE',
-        priority: 'NORMAL',
-        read: false,
-        time: 'Just now'
-      });
-    }
-
     render();
   }
 
@@ -928,7 +631,7 @@
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; font-size:12px;">
                   <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-                    <input type="checkbox" id="remember-me" checked> Remember me
+                    <input type="checkbox"> Remember me
                   </label>
                   <a href="#" onclick="openForgotPasswordModal()" style="color:var(--primary-blue); text-decoration:none; font-weight:600;">Forgot Password?</a>
                 </div>
@@ -1139,27 +842,16 @@
               ${role !== 'RESIDENT' ? `
                 <div class="header-search" style="position:relative;">
                   <i data-lucide="search"></i>
-                  <input type="text" placeholder="Search residents, flats, or logs..." id="global-search-input" value="${state.searchQuery}" autocomplete="off">
+                  <input type="text" placeholder="Search residents, flats, or phone numbers..." id="global-search-input" value="${state.searchQuery}" autocomplete="off">
                   ${renderSearchDropdown()}
                 </div>
               ` : ''}
             </div>
 
             <div class="header-actions">
-              <!-- SOS Panic Action Button -->
-              <button class="btn-sos-panic" onclick="openEmergencyModal()" title="Trigger Panic SOS Alert">
-                🚨 SOS
-              </button>
-
-              <!-- Mute / Unmute Audio Button -->
-              <div class="sound-toggle-btn" onclick="toggleSoundMute()" title="${state.soundMuted ? 'Unmute alert sounds' : 'Mute alert sounds'}">
-                <i data-lucide="${state.soundMuted ? 'volume-x' : 'volume-2'}"></i>
-              </div>
-
-              <!-- Notification Bell with Count Badge -->
-              <div class="notification-bell" onclick="toggleNotificationDrawer()" title="View Notifications">
+              <div class="notification-bell" onclick="toggleNotificationDrawer()">
                 <i data-lucide="bell"></i>
-                ${unreadCount > 0 ? `<span class="bell-badge-count">${unreadCount > 99 ? '99+' : unreadCount}</span>` : ''}
+                ${unreadCount > 0 ? `<span class="bell-badge-dot"></span>` : ''}
               </div>
 
               <div class="user-profile-pill" onclick="openProfileModal()">
@@ -1169,8 +861,26 @@
             </div>
           </header>
 
-          <!-- Notification Drawer Card -->
-          ${state.notificationDrawerOpen ? renderNotificationDrawerCard() : ''}
+          <!-- Notification Drawer Dropdown -->
+          ${state.notificationDrawerOpen ? `
+            <div class="notification-drawer" style="position:absolute; right:80px; top:64px; background:white; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 10px 25px rgba(0,0,0,0.15); width:320px; z-index:100; padding:16px;">
+              <div class="drawer-header" style="display:flex; justify-content:space-between; margin-bottom:12px;">
+                <span class="drawer-title" style="font-weight:700; font-size:14px;">Notifications (${state.notifications.length})</span>
+                <span style="font-size:11px; color:var(--primary-blue); cursor:pointer; font-weight:600;" onclick="markNotificationsRead()">Mark all read</span>
+              </div>
+              <div class="drawer-body" style="max-height:260px; overflow-y:auto;">
+                ${state.notifications.length === 0 ? '<div style="font-size:12px; color:var(--text-muted); text-align:center; padding:12px;">No new notifications</div>' : state.notifications.map(n => `
+                  <div class="drawer-item" style="padding:8px 0; border-bottom:1px solid #f1f5f9;">
+                    <div style="font-weight:700; font-size:12px; color:#1e293b; display:flex; justify-content:space-between;">
+                      <span>${n.title}</span>
+                      <span style="font-size:10px; color:var(--text-muted);">${n.time}</span>
+                    </div>
+                    <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${n.message}</div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
 
           <main class="content-canvas">
             ${role === 'ADMIN' ? renderAdminView() : ''}
@@ -2117,9 +1827,6 @@
           return;
         }
 
-        const rememberMeEl = document.getElementById('remember-me');
-        const rememberMe = rememberMeEl ? rememberMeEl.checked : true;
-
         state.isAuthenticating = true;
         render();
 
@@ -2148,7 +1855,7 @@
               mustResetPassword: data.mustResetPassword || false
             };
             saveDatabaseUser({ ...user, password });
-            saveSession(user, data.token || ('token_' + Date.now()), rememberMe);
+            saveSession(user, data.token || ('token_' + Date.now()));
             state.isAuthenticating = false;
             state.activeView = user.role.toLowerCase();
             render();
@@ -2189,7 +1896,7 @@
             return;
           }
 
-          saveSession(matched, 'token_' + Date.now(), rememberMe);
+          saveSession(matched, 'token_' + Date.now());
           state.isAuthenticating = false;
 
           // Check if first-time password reset is required for newly provisioned accounts
@@ -2353,11 +2060,12 @@
         };
 
         try {
-          const resp = await apiFetch('/api/guard/visitor/register', {
+          const resp = await fetch('/api/guard/visitor/register', {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
-          if (resp && resp.ok) {
+          if (resp.ok) {
             const data = await resp.json();
             if (data && data.id) newReq.id = data.id;
           }
@@ -2576,8 +2284,9 @@
         });
       }
       try {
-        await apiFetch('/api/resident/visitor/respond', {
+        await fetch('/api/resident/visitor/respond', {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ requestId, status: 'APPROVED' })
         });
       } catch (e) {}
@@ -2633,8 +2342,9 @@
         });
       }
       try {
-        await apiFetch('/api/resident/visitor/respond', {
+        await fetch('/api/resident/visitor/respond', {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ requestId, status: 'DENIED', denialReason })
         });
       } catch (e) {}
@@ -3552,336 +3262,6 @@
     `;
     lucide.createIcons();
   };
-
-  function renderNotificationDrawerCard() {
-    const unreadList = state.notifications || [];
-    const filter = state.notificationFilter || 'ALL';
-
-    const filtered = unreadList.filter(n => {
-      if (filter === 'ALL') return true;
-      return n.category === filter;
-    });
-
-    const unreadCount = unreadList.filter(n => !n.read).length;
-
-    return `
-      <div class="notification-drawer-card">
-        <div class="drawer-header-bar">
-          <div class="drawer-title-group">
-            <i data-lucide="bell" style="width:18px; height:18px; color:#2563eb;"></i>
-            <span>Notifications (${unreadCount})</span>
-          </div>
-          <div style="display:flex; gap:12px;">
-            <span class="drawer-action-link" onclick="markNotificationsRead()">Mark read</span>
-            <span class="drawer-action-link" style="color:#ef4444;" onclick="clearAllNotifications()">Clear</span>
-          </div>
-        </div>
-
-        <div class="drawer-filter-pills">
-          <button class="drawer-pill-btn ${filter === 'ALL' ? 'active' : ''}" onclick="filterNotifications('ALL')">All</button>
-          <button class="drawer-pill-btn ${filter === 'VISITOR' ? 'active' : ''}" onclick="filterNotifications('VISITOR')">🔔 Visitors</button>
-          <button class="drawer-pill-btn ${filter === 'EMERGENCY_SOS' ? 'active' : ''}" onclick="filterNotifications('EMERGENCY_SOS')">🚨 SOS</button>
-          <button class="drawer-pill-btn ${filter === 'COMPLAINT' ? 'active' : ''}" onclick="filterNotifications('COMPLAINT')">⚠️ Issues</button>
-          <button class="drawer-pill-btn ${filter === 'CLUBHOUSE' ? 'active' : ''}" onclick="filterNotifications('CLUBHOUSE')">🎉 Bookings</button>
-          <button class="drawer-pill-btn ${filter === 'ANNOUNCEMENT' ? 'active' : ''}" onclick="filterNotifications('ANNOUNCEMENT')">📢 News</button>
-        </div>
-
-        <div class="drawer-item-list">
-          ${filtered.length === 0 ? `
-            <div style="font-size:12px; color:#94a3b8; text-align:center; padding:24px;">No notifications in this filter</div>
-          ` : filtered.map((n, idx) => `
-            <div class="drawer-item-row ${!n.read ? 'unread' : ''}" onclick="markNotificationItemRead(${idx})">
-              <div class="drawer-item-icon ${n.category === 'EMERGENCY_SOS' ? 'icon-cat-emergency' : n.category === 'VISITOR' ? 'icon-cat-visitor' : n.category === 'COMPLAINT' ? 'icon-cat-complaint' : n.category === 'CLUBHOUSE' ? 'icon-cat-booking' : 'icon-cat-announcement'}">
-                <i data-lucide="${n.category === 'EMERGENCY_SOS' ? 'alert-triangle' : n.category === 'VISITOR' ? 'user-check' : n.category === 'COMPLAINT' ? 'help-circle' : n.category === 'CLUBHOUSE' ? 'calendar' : 'megaphone'}"></i>
-              </div>
-              <div class="drawer-item-content">
-                <div class="drawer-item-top">
-                  <span class="drawer-item-title">${n.title}</span>
-                  <span class="drawer-item-time">${n.time || 'Just now'}</span>
-                </div>
-                <div class="drawer-item-msg">${n.message}</div>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-
-        <div class="drawer-footer-bar">
-          <span style="font-size:11px; color:#64748b;">Cross-Tab Realtime Synced</span>
-          ${state.currentUser && state.currentUser.role === 'ADMIN' ? `
-            <button class="btn btn-secondary" style="font-size:11px; padding:4px 10px;" onclick="openAnnouncementModal()">+ Broadcast News</button>
-          ` : ''}
-        </div>
-      </div>
-    `;
-  }
-
-  window.filterNotifications = function(cat) {
-    state.notificationFilter = cat;
-    render();
-  };
-
-  window.markNotificationItemRead = function(idx) {
-    if (state.notifications && state.notifications[idx]) {
-      state.notifications[idx].read = true;
-      saveNotificationsToStorage();
-      render();
-    }
-  };
-
-  window.markNotificationsRead = function() {
-    if (state.notifications) {
-      state.notifications.forEach(n => n.read = true);
-      saveNotificationsToStorage();
-      showToast('All notifications marked as read', 'info');
-      render();
-    }
-  };
-
-  window.clearAllNotifications = function() {
-    state.notifications = [];
-    saveNotificationsToStorage();
-    showToast('Notifications cleared', 'info');
-    render();
-  };
-
-  window.openEmergencyModal = function() {
-    requestWebPushPermission();
-    const user = state.currentUser || { fullName: 'Resident', role: 'RESIDENT', blockNumber: 'A', flatNumber: '101' };
-    const container = document.getElementById('modal-container');
-    container.innerHTML = `
-      <div class="modal-overlay">
-        <div class="modal-card" style="border-top:5px solid #dc2626;">
-          <div class="modal-header">
-            <div style="display:flex; align-items:center; gap:8px;">
-              <span style="font-size:24px;">🚨</span>
-              <h3 style="font-family:var(--font-heading); font-size:18px; font-weight:800; color:#dc2626;">Trigger Emergency Panic SOS</h3>
-            </div>
-            <i data-lucide="x" style="cursor:pointer;" onclick="closeModal()"></i>
-          </div>
-          <div class="modal-body">
-            <p style="font-size:13px; color:#64748b; margin-bottom:16px;">
-              This will immediately broadcast a critical panic alert to <strong>all security guards, society admins, and open terminals</strong> with high-priority audio sirens.
-            </p>
-
-            <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
-              <label style="font-size:12px; font-weight:700; color:#1e293b;">Select Emergency Category:</label>
-              <select id="sos-category" class="guard-tap-control" style="width:100%; font-weight:700;">
-                <option value="MEDICAL">🚑 Medical Emergency</option>
-                <option value="FIRE">🔥 Fire Hazard Alert</option>
-                <option value="SECURITY">🛡️ Intruder / Security Threat</option>
-                <option value="GATE_DISTURBANCE">🚪 Gate Disturbance / Conflict</option>
-                <option value="GENERAL">⚠️ General Panic Alert</option>
-              </select>
-            </div>
-
-            <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:20px;">
-              <label style="font-size:12px; font-weight:700; color:#1e293b;">Additional Notes / Location Details (Optional):</label>
-              <textarea id="sos-notes" rows="2" placeholder="e.g. Need immediate ambulance at Block A Lift Lobby" style="width:100%; padding:10px; border-radius:8px; border:1px solid #cbd5e1; font-size:13px;"></textarea>
-            </div>
-
-            <div style="display:flex; gap:10px;">
-              <button class="btn btn-secondary" onclick="closeModal()" style="flex:1;">Cancel</button>
-              <button class="btn btn-primary" onclick="submitEmergencySos()" style="flex:2; background:#dc2626; border-color:#dc2626; font-weight:800;">
-                🚨 BROADCAST SOS NOW
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-    lucide.createIcons();
-  };
-
-  window.submitEmergencySos = function() {
-    const user = state.currentUser || { fullName: 'Resident User', role: 'RESIDENT', blockNumber: 'A', flatNumber: '101' };
-    const categorySelect = document.getElementById('sos-category');
-    const notesInput = document.getElementById('sos-notes');
-
-    const emergencyPayload = {
-      emergencyType: categorySelect ? categorySelect.value : 'GENERAL',
-      callerName: user.fullName || 'Resident',
-      callerRole: user.role || 'RESIDENT',
-      callerPhone: user.phone || '9988776655',
-      blockNumber: user.blockNumber || 'A',
-      flatNumber: user.flatNumber || '101',
-      note: notesInput ? notesInput.value : '',
-      status: 'ACTIVE',
-      createdAt: new Date().toISOString()
-    };
-
-    closeModal();
-
-    fetch('/api/emergency/sos', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + (state.token || ''),
-        'X-User-Name': user.fullName || 'Resident'
-      },
-      body: JSON.stringify(emergencyPayload)
-    }).catch(() => {});
-
-    handleNotificationEvent({
-      type: 'EMERGENCY_SOS',
-      category: 'EMERGENCY_SOS',
-      payload: emergencyPayload
-    });
-  };
-
-  function renderEmergencyBanner() {
-    const root = document.getElementById('emergency-banner-root');
-    if (!root) return;
-
-    if (!state.activeEmergency || state.activeEmergency.status === 'RESOLVED') {
-      root.innerHTML = '';
-      return;
-    }
-
-    const em = state.activeEmergency;
-    const isGuardOrAdmin = state.currentUser && (state.currentUser.role === 'GUARD' || state.currentUser.role === 'ADMIN');
-
-    root.innerHTML = `
-      <div class="emergency-banner">
-        <div class="emergency-banner-left">
-          <div class="emergency-siren-icon">🚨</div>
-          <div>
-            <div class="emergency-title">CRITICAL EMERGENCY SOS: ${em.emergencyType || 'ALERT'}</div>
-            <div class="emergency-details">
-              Reported by <strong>${em.callerName || 'Resident'}</strong> (${em.blockNumber ? 'Flat ' + em.blockNumber + '-' + em.flatNumber : 'Gate'})
-              ${em.note ? ' • Note: "' + em.note + '"' : ''}
-              ${em.status === 'ACKNOWLEDGED' ? ' • <span style="color:#fef08a; font-weight:700;">Acknowledged by ' + (em.acknowledgedBy || 'Guard') + '</span>' : ''}
-            </div>
-          </div>
-        </div>
-        <div class="emergency-banner-actions">
-          ${isGuardOrAdmin && em.status !== 'ACKNOWLEDGED' ? `
-            <button class="btn-ack-emergency" onclick="acknowledgeEmergencyAlert(${em.id || 1})">
-              👮 Acknowledge & Dispatch
-            </button>
-          ` : ''}
-          ${isGuardOrAdmin ? `
-            <button class="btn-dismiss-emergency" onclick="resolveEmergencyAlert(${em.id || 1})">
-              ✅ Resolve Alert
-            </button>
-          ` : `
-            <button class="btn-dismiss-emergency" onclick="dismissEmergencyBanner()">
-              Dismiss Banner
-            </button>
-          `}
-        </div>
-      </div>
-    `;
-  }
-
-  window.acknowledgeEmergencyAlert = function(id) {
-    if (state.activeEmergency) {
-      state.activeEmergency.status = 'ACKNOWLEDGED';
-      state.activeEmergency.acknowledgedBy = state.currentUser ? state.currentUser.fullName : 'On-Duty Guard';
-      stopEmergencySound();
-      showToast('Emergency alert acknowledged by guard', 'success');
-      broadcastSyncEvent('SYNC_EMERGENCY_SOS', state.activeEmergency);
-      renderEmergencyBanner();
-    }
-  };
-
-  window.resolveEmergencyAlert = function(id) {
-    if (state.activeEmergency) {
-      state.activeEmergency.status = 'RESOLVED';
-      stopEmergencySound();
-      showToast('Emergency alert marked as resolved', 'success');
-      broadcastSyncEvent('SYNC_EMERGENCY_SOS', state.activeEmergency);
-      state.activeEmergency = null;
-      renderEmergencyBanner();
-    }
-  };
-
-  window.dismissEmergencyBanner = function() {
-    stopEmergencySound();
-    state.activeEmergency = null;
-    renderEmergencyBanner();
-  };
-
-  window.openAnnouncementModal = function() {
-    const container = document.getElementById('modal-container');
-    container.innerHTML = `
-      <div class="modal-overlay">
-        <div class="modal-card">
-          <div class="modal-header">
-            <h3 style="font-family:var(--font-heading); font-size:16px; font-weight:700;">📢 Broadcast Society Announcement</h3>
-            <i data-lucide="x" style="cursor:pointer;" onclick="closeModal()"></i>
-          </div>
-          <div class="modal-body">
-            <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:16px;">
-              <div>
-                <label style="font-size:12px; font-weight:700; color:#1e293b;">Title:</label>
-                <input type="text" id="announce-title" placeholder="e.g. Water Tank Maintenance Tomorrow" class="guard-tap-control" style="width:100%; margin-top:4px;">
-              </div>
-
-              <div>
-                <label style="font-size:12px; font-weight:700; color:#1e293b;">Message Content:</label>
-                <textarea id="announce-msg" rows="3" placeholder="Water supply will be temporarily paused from 10 AM to 2 PM." style="width:100%; padding:10px; border-radius:8px; border:1px solid #cbd5e1; font-size:13px; margin-top:4px;"></textarea>
-              </div>
-
-              <div>
-                <label style="font-size:12px; font-weight:700; color:#1e293b;">Target Group:</label>
-                <select id="announce-target" class="guard-tap-control" style="width:100%; margin-top:4px;">
-                  <option value="ALL">All Society Users</option>
-                  <option value="RESIDENT">Residents Only</option>
-                  <option value="GUARD">Security Guards Only</option>
-                </select>
-              </div>
-            </div>
-
-            <div style="display:flex; gap:10px;">
-              <button class="btn btn-secondary" onclick="closeModal()" style="flex:1;">Cancel</button>
-              <button class="btn btn-primary" onclick="submitAnnouncement()" style="flex:2;">📢 Broadcast Announcement</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-    lucide.createIcons();
-  };
-
-  window.submitAnnouncement = function() {
-    const titleInput = document.getElementById('announce-title');
-    const msgInput = document.getElementById('announce-msg');
-    const targetSelect = document.getElementById('announce-target');
-
-    if (!titleInput || !msgInput || !titleInput.value || !msgInput.value) {
-      showToast('Please provide a title and message content', 'error');
-      return;
-    }
-
-    const title = titleInput.value;
-    const msg = msgInput.value;
-    const target = targetSelect ? targetSelect.value : 'ALL';
-
-    closeModal();
-
-    apiFetch('/api/notifications/announcements', {
-      method: 'POST',
-      headers: {
-        'X-User-Name': state.currentUser ? state.currentUser.fullName : 'Admin'
-      },
-      body: JSON.stringify({
-        title: title,
-        message: msg,
-        category: 'ANNOUNCEMENT',
-        priority: 'HIGH',
-        targetRole: target
-      })
-    }).catch(() => {});
-
-    handleNotificationEvent({
-      type: 'ANNOUNCEMENT',
-      category: 'ANNOUNCEMENT',
-      title: title,
-      message: msg
-    });
-  };
-
-  loadNotificationsFromStorage();
 
   window.closeModal = function () {
     if (typeof closeCameraModal === 'function') closeCameraModal();
