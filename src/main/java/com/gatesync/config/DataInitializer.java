@@ -61,22 +61,61 @@ public class DataInitializer implements CommandLineRunner {
             flatRepository.save(f);
         }
 
-        // 2. Essential Seed Account ONLY (System Admin)
-        // Testing residents and guards removed so Resident and Guard counts start at zero.
-        User admin = User.builder()
-                .id(sequenceService.nextId("users"))
-                .loginId("admin")
-                .password(passwordEncoder.encode("123"))
-                .fullName("System Admin")
-                .email("admin@gatesync.in")
-                .phone("9999999999")
-                .role(Role.ADMIN)
-                .societyId(societyId)
-                .mustResetPassword(false)
-                .active(true)
-                .accountLocked(false)
-                .build();
-        userRepository.save(admin);
+        // 2. Essential Seed Accounts for all 3 Roles (Admin, Resident, Guard)
+        if (userRepository.findByLoginId("admin").isEmpty()) {
+            User admin = User.builder()
+                    .id(sequenceService.nextId("users"))
+                    .loginId("admin")
+                    .password(passwordEncoder.encode("123"))
+                    .fullName("System Admin")
+                    .email("admin@gatesync.in")
+                    .phone("9999999999")
+                    .role(Role.ADMIN)
+                    .societyId(societyId)
+                    .mustResetPassword(false)
+                    .active(true)
+                    .accountLocked(false)
+                    .build();
+            userRepository.save(admin);
+        }
+
+        if (userRepository.findByLoginId("101").isEmpty()) {
+            User resident = User.builder()
+                    .id(sequenceService.nextId("users"))
+                    .loginId("101")
+                    .password(passwordEncoder.encode("123"))
+                    .fullName("Amit Patel")
+                    .email("resident@gatesync.in")
+                    .phone("9876543210")
+                    .blockNumber("A")
+                    .flatNumber("101")
+                    .role(Role.RESIDENT)
+                    .societyId(societyId)
+                    .mustResetPassword(false)
+                    .active(true)
+                    .accountLocked(false)
+                    .build();
+            userRepository.save(resident);
+        }
+
+        if (userRepository.findByLoginId("guard").isEmpty()) {
+            User guard = User.builder()
+                    .id(sequenceService.nextId("users"))
+                    .loginId("guard")
+                    .password(passwordEncoder.encode("123"))
+                    .fullName("Rajesh Singh (Guard)")
+                    .email("guard@gatesync.in")
+                    .phone("9811223344")
+                    .gateAssigned("Main Gate A")
+                    .shiftSchedule("Day Shift (08:00 AM - 08:00 PM)")
+                    .role(Role.GUARD)
+                    .societyId(societyId)
+                    .mustResetPassword(false)
+                    .active(true)
+                    .accountLocked(false)
+                    .build();
+            userRepository.save(guard);
+        }
 
         // 3. Initial Audit Log
         AuditLog log = AuditLog.builder()

@@ -56,10 +56,10 @@
       if (stored) return JSON.parse(stored);
     } catch (e) {}
 
-    // Clean initialization: Only seed default Admin account.
-    // Testing Resident and Guard accounts are removed so Resident & Guard counts start at zero (0).
     const seed = [
-      { id: 1, loginId: 'admin', password: '123', fullName: 'System Admin', role: 'ADMIN', phone: '9999999999' }
+      { id: 1, loginId: 'admin', password: '123', fullName: 'System Admin', role: 'ADMIN', phone: '9999999999' },
+      { id: 2, loginId: '101', password: '123', fullName: 'Amit Patel', role: 'RESIDENT', phone: '9876543210', blockNumber: 'A', flatNumber: '101', flat: 'A-101' },
+      { id: 3, loginId: 'guard', password: '123', fullName: 'Rajesh Singh (Guard)', role: 'GUARD', phone: '9811223344', gateAssigned: 'Main Gate A', shiftSchedule: 'Day Shift' }
     ];
 
     localStorage.setItem('gatesync_db_users', JSON.stringify(seed));
@@ -514,6 +514,38 @@
     }, 4000);
   };
 
+  window.setAuthRole = function (role) {
+    state.authRole = role;
+    render();
+  };
+
+  window.setAuthMode = function (mode) {
+    state.authMode = mode;
+    render();
+  };
+
+  window.quickDemoLogin = function (role) {
+    if (role === 'RESIDENT') {
+      state.authRole = 'RESIDENT';
+      state.authMode = 'LOGIN';
+      const user = { id: 2, loginId: '101', fullName: 'Amit Patel', role: 'RESIDENT', blockNumber: 'A', flatNumber: '101', flat: 'A-101' };
+      saveSession(user, 'demo_token_resident');
+    } else if (role === 'GUARD') {
+      state.authRole = 'GUARD';
+      state.authMode = 'LOGIN';
+      const user = { id: 3, loginId: 'guard', fullName: 'Rajesh Singh (Guard)', role: 'GUARD', gateAssigned: 'Main Gate A' };
+      saveSession(user, 'demo_token_guard');
+    } else {
+      state.authRole = 'ADMIN';
+      state.authMode = 'LOGIN';
+      const user = { id: 1, loginId: 'admin', fullName: 'System Admin', role: 'ADMIN' };
+      saveSession(user, 'demo_token_admin');
+    }
+    state.activeView = role.toLowerCase();
+    render();
+    showToast(`Logged in successfully as ${role}!`, 'success');
+  };
+
   // Main Render Orchestrator
   function render() {
     const container = document.getElementById('app-container');
@@ -685,6 +717,28 @@
                 </button>
               </form>
             `}
+
+            <!-- Quick Demo Login Buttons for Instant Access -->
+            <div style="margin-top:20px; padding-top:16px; border-top:1px dashed #cbd5e1;">
+              <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px; text-align:center;">⚡ Instant Demo Portal Access</div>
+              <div style="display:flex; flex-direction:column; gap:8px;">
+                <button type="button" onclick="quickDemoLogin('RESIDENT')" class="btn" style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; text-align:left; justify-content:flex-start; font-size:12px; padding:9px 12px; cursor:pointer;">
+                  <i data-lucide="home" style="width:16px; height:16px; color:#2563eb;"></i>
+                  <span style="flex:1;">Log in as <strong>Resident</strong> (Flat A-101)</span>
+                  <span style="font-size:10px; opacity:0.85; background:#dbeafe; padding:2px 6px; border-radius:4px; font-weight:700;">101 / 123</span>
+                </button>
+                <button type="button" onclick="quickDemoLogin('GUARD')" class="btn" style="background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; text-align:left; justify-content:flex-start; font-size:12px; padding:9px 12px; cursor:pointer;">
+                  <i data-lucide="shield-check" style="width:16px; height:16px; color:#16a34a;"></i>
+                  <span style="flex:1;">Log in as <strong>Security Guard</strong> (Gate A)</span>
+                  <span style="font-size:10px; opacity:0.85; background:#dcfce7; padding:2px 6px; border-radius:4px; font-weight:700;">guard / 123</span>
+                </button>
+                <button type="button" onclick="quickDemoLogin('ADMIN')" class="btn" style="background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; text-align:left; justify-content:flex-start; font-size:12px; padding:9px 12px; cursor:pointer;">
+                  <i data-lucide="shield" style="width:16px; height:16px; color:#dc2626;"></i>
+                  <span style="flex:1;">Log in as <strong>System Admin</strong></span>
+                  <span style="font-size:10px; opacity:0.85; background:#fee2e2; padding:2px 6px; border-radius:4px; font-weight:700;">admin / 123</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -849,6 +903,10 @@
             </div>
 
             <div class="header-actions">
+              <button class="btn btn-secondary" onclick="clearSession()" style="padding:6px 12px; font-size:12px; height:36px; border-radius:8px; border:1px solid #cbd5e1; background:#f8fafc; font-weight:600; cursor:pointer;" title="Log out and return to Portal Selection Landing Page">
+                <i data-lucide="refresh-cw" style="width:14px; height:14px; color:var(--primary-blue);"></i> Switch Portal
+              </button>
+
               <div class="notification-bell" onclick="toggleNotificationDrawer()">
                 <i data-lucide="bell"></i>
                 ${unreadCount > 0 ? `<span class="bell-badge-dot"></span>` : ''}
@@ -856,7 +914,7 @@
 
               <div class="user-profile-pill" onclick="openProfileModal()">
                 <div class="avatar-initials">${user.fullName ? user.fullName.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().substring(0, 2) : 'AP'}</div>
-                <span class="user-profile-name">${user.fullName || 'Resident'}</span>
+                <span class="user-profile-name">${user.fullName || 'Resident'} (${role})</span>
               </div>
             </div>
           </header>
