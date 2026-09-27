@@ -27,15 +27,31 @@ try {
                 $json = '{"status":"OK","message":"Your API is running","timestamp":"' + (Get-Date -Format "o") + '"}'
                 $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
                 $res.ContentType = "application/json; charset=utf-8"
-            } elseif (Test-Path $fullPath -PathType Leaf) {
-                $bytes = [System.IO.File]::ReadAllBytes($fullPath)
-                if ($fullPath.EndsWith(".html")) { $res.ContentType = "text/html; charset=utf-8" }
-                elseif ($fullPath.EndsWith(".css")) { $res.ContentType = "text/css" }
-                elseif ($fullPath.EndsWith(".js")) { $res.ContentType = "application/javascript" }
-                elseif ($fullPath.EndsWith(".json")) { $res.ContentType = "application/json" }
             } else {
-                $res.StatusCode = 404
-                $bytes = [System.Text.Encoding]::UTF8.GetBytes("404 Not Found")
+                $targetFile = $null
+                if (Test-Path $fullPath -PathType Leaf) {
+                    $targetFile = $fullPath
+                } else {
+                    $rootPath = Join-Path $PSScriptRoot ($path.Replace('/', '\').TrimStart('\'))
+                    if (Test-Path $rootPath -PathType Leaf) {
+                        $targetFile = $rootPath
+                    }
+                }
+
+                if ($targetFile) {
+                    $bytes = [System.IO.File]::ReadAllBytes($targetFile)
+                    if ($targetFile.EndsWith(".html")) { $res.ContentType = "text/html; charset=utf-8" }
+                    elseif ($targetFile.EndsWith(".css")) { $res.ContentType = "text/css" }
+                    elseif ($targetFile.EndsWith(".js")) { $res.ContentType = "application/javascript" }
+                    elseif ($targetFile.EndsWith(".json")) { $res.ContentType = "application/json" }
+                    elseif ($targetFile.EndsWith(".png")) { $res.ContentType = "image/png" }
+                    elseif ($targetFile.EndsWith(".jpg") -or $targetFile.EndsWith(".jpeg")) { $res.ContentType = "image/jpeg" }
+                    elseif ($targetFile.EndsWith(".svg")) { $res.ContentType = "image/svg+xml" }
+                    elseif ($targetFile.EndsWith(".ico")) { $res.ContentType = "image/x-icon" }
+                } else {
+                    $res.StatusCode = 404
+                    $bytes = [System.Text.Encoding]::UTF8.GetBytes("404 Not Found")
+                }
             }
             
             $res.ContentLength64 = $bytes.Length
