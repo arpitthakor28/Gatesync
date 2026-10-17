@@ -3,8 +3,10 @@ package com.societysync.controller;
 import com.societysync.dto.BillCreateDto;
 import com.societysync.dto.MarkCashPaidDto;
 import com.societysync.entity.Bill;
+import com.societysync.security.UserPrincipal;
 import com.societysync.service.BillService;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,31 +20,34 @@ public class BillController {
         this.billService = billService;
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/api/admin/bills/generate")
     public List<Bill> generate(@RequestBody BillCreateDto dto) {
         return billService.generate(dto);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/api/admin/bills")
     public List<Bill> all() {
         return billService.all();
     }
 
-    // The fix for the "admin only has cash" bug: this endpoint marks it paid in cash.
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/api/admin/bills/mark-cash-paid")
-    public Bill markCashPaid(@RequestBody MarkCashPaidDto dto, Authentication auth) {
-        return billService.markPaidCash(dto.billId(), auth.getName());
+    public Bill markCashPaid(@RequestBody MarkCashPaidDto dto, @AuthenticationPrincipal UserPrincipal principal) {
+        return billService.markPaidCash(dto.billId(), principal.getUsername());
     }
 
-    // ...and this is the other half of the fix: residents now have an online path too.
-    // Wire this to a real payment gateway callback/webhook when you add one.
+    @PreAuthorize("hasAnyRole('RESIDENT', 'ADMIN')")
     @PostMapping("/api/resident/bills/{billId}/mark-paid-online")
     public Bill markPaidOnline(@PathVariable Long billId) {
         return billService.markPaidOnline(billId);
     }
 
+    // Flat number derived solely from verified JWT principal
+    @PreAuthorize("hasAnyRole('RESIDENT', 'ADMIN')")
     @GetMapping("/api/resident/bills")
-    public List<Bill> myBills(@RequestParam String flatNumber) {
-        return billService.forFlat(flatNumber);
+    public List<Bill> myBills(@AuthenticationPrincipal UserPrincipal principal) {
+        return billService.forFlat(principal.getFlatNumber());
     }
 }

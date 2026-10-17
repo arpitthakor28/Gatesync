@@ -622,3 +622,130 @@ input, select, textarea {
     display: none !important;
   }
 }
+
+/* ==========================================================================
+   MOBILE-FIRST & ACCESSIBILITY ENHANCEMENTS (PHASE 0)
+   - 44px Minimum Touch Targets
+   - iOS / Android Safe-Area Insets (notch, home bar)
+   - Responsive Slide-Out Sidebar Drawer
+   - No Hover-Only Interactivity (Touch & Active States)
+   ========================================================================== */
+
+/* Universal Touch & Safe Area Insets */
+html, body {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Enforce 44px Touch Target Size on all Interactive Controls */
+button, 
+.btn, 
+input[type="button"], 
+input[type="submit"], 
+input[type="text"], 
+input[type="password"], 
+select, 
+.nav-item-btn {
+  min-height: 44px;
+  touch-action: manipulation;
+}
+
+/* Active Touch Feedback (Replaces Hover-Only) */
+button:active, 
+.btn:active, 
+.nav-item-btn:active {
+  transform: scale(0.975);
+  transition: transform 0.08s ease;
+}
+
+/* Mobile Breakpoint: Tablets and Phones (<= 768px) */
+@media screen and (max-width: 768px) {
+  .app-container {
+    flex-direction: column !important;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  .main-wrapper {
+    width: 100% !important;
+    min-width: 100% !important;
+  }
+
+  /* Responsive Header */
+  header {
+    height: 68px !important;
+    padding: 0 16px !important;
+  }
+
+  .mobile-sidebar-toggle {
+    display: flex !important;
+  }
+
+  .header-search-container {
+    display: none !important;
+  }
+
+  .header-clock-badge {
+    display: none !important;
+  }
+
+  .header-profile-text {
+    display: none !important;
+  }
+
+  /* Responsive Slide-Out Sidebar Drawer */
+  .app-sidebar {
+    position: fixed !important;
+    top: 0;
+    left: -320px;
+    width: 290px !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.4);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 1000 !important;
+  }
+
+  .app-sidebar.sidebar-open {
+    transform: translateX(320px);
+  }
+
+  .mobile-sidebar-close {
+    display: flex !important;
+  }
+
+  /* Responsive Page Content */
+  .page-content {
+    padding: 16px !important;
+  }
+
+  /* Form and Grid adaptations */
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+
+  .section-header .btn {
+    width: 100% !important;
+    justify-content: center;
+  }
+
+  .modal-content {
+    padding: 20px !important;
+    border-radius: 20px !important;
+    margin: 10px !important;
+    max-height: 92vh !important;
+  }
+
+  /* Table horizontally scrollable on mobile */
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+

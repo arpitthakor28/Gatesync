@@ -8,9 +8,7 @@ import lombok.Setter;
 import java.time.Instant;
 
 /**
- * A refresh token per logged-in device. Storing these (hashed) server-side, rather than
- * trusting a long-lived JWT alone, is what makes "login once, stay logged in" safely revocable:
- * logging out / resetting a password can invalidate specific sessions.
+ * DB-backed, revocable refresh token per logged-in device.
  */
 @Entity
 @Table(name = "refresh_token")
@@ -37,4 +35,11 @@ public class RefreshToken {
     private boolean revoked = false;
 
     private String deviceInfo;
+    private String ipAddress;
+    
+    @Column(nullable = false)
+    private Instant createdAt = Instant.now();
+
+    @Column(nullable = false)
+    private Instant lastUsedAt = Instant.now();
 }

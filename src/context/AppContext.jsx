@@ -68,13 +68,44 @@ export const AppProvider = ({ children }) => {
     localStorage.setItem('hms_theme', theme);
   }, [theme]);
 
-  // Switch role helper
-  const switchRole = (role) => {
-    setUserRole(role);
-    localStorage.setItem('hms_active_role', role);
-    if (role === 'admin') setCurrentUser(data.admin[0] || initialSeedData.admin[0]);
-    if (role === 'member') setCurrentUser(data.members[0] || initialSeedData.members[0]);
-    if (role === 'staff') setCurrentUser(data.staff[0] || initialSeedData.staff[0]);
+  const auth = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Sync with verified JWT authentication session whenever auth updates
+  useEffect(() => {
+    if (auth?.user) {
+      const normalizedRole = auth.user.role === 'ADMIN' ? 'admin' : (auth.user.role === 'RESIDENT' ? 'member' : 'staff');
+      setUserRole(normalizedRole);
+      setCurrentUser({
+        id: auth.user.id,
+        username: auth.user.fullName || auth.user.loginId,
+        loginId: auth.user.loginId,
+        flat: auth.user.flatNumber || 'A-101',
+        role: auth.user.role,
+        societyId: auth.user.societyId || 'SOC-101',
+        avatar: auth.user.role === 'ADMIN' 
+          ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'
+          : auth.user.role === 'GUARD'
+          ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80'
+          : 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80'
+      });
+    }
+  }, [auth?.user]);
+
+  // Switch role: Attempts real login with verified backend test credentials, falls back gracefully
+  const switchRole = async (role) => {
+    try {
+      if (role === 'admin') await auth.login('admin', 'admin123');
+      else if (role === 'member') await auth.login('A101', 'resident123');
+      else if (role === 'staff') await auth.login('guard1', 'guard123');
+    } catch (e) {
+      console.warn('Backend login fallback to simulated role:', e);
+      setUserRole(role);
+      localStorage.setItem('hms_active_role', role);
+      if (role === 'admin') setCurrentUser(data.admin[0] || initialSeedData.admin[0]);
+      if (role === 'member') setCurrentUser(data.members[0] || initialSeedData.members[0]);
+      if (role === 'staff') setCurrentUser(data.staff[0] || initialSeedData.staff[0]);
+    }
   };
 
   const toggleTheme = () => {

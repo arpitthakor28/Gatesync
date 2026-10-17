@@ -19,13 +19,14 @@ public class VisitorRequest {
     private Long id;
 
     @Column(nullable = false)
+    private String societyId = "SOC-101";
+
+    @Column(nullable = false)
     private String visitorName;
 
     private String visitorPhone;
-
+    private String vehicleNumber;
     private String purpose;
-
-    // Cloudinary/S3 URL or similar - optional, matches GateSync's guard-captures-photo flow
     private String photoUrl;
 
     @Column(nullable = false)
@@ -42,7 +43,8 @@ public class VisitorRequest {
     private Instant createdAt = Instant.now();
 
     private Instant respondedAt;
+    private Instant checkedOutAt;
 
-    // How the resident responded, useful for the guard-facing screen
     private String respondedByLoginId;
+    private String denialReason;
 }

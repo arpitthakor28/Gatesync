@@ -2,5 +2,6 @@ package com.societysync.dto;
 
 public record VisitorDecisionDto(
     Long requestId,
-    boolean approved
+    boolean approved,
+    String denialReason
 ) {}

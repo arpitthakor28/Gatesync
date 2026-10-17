@@ -1,5 +1,6 @@
 package com.societysync.security;
 
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -32,10 +33,27 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (header != null && header.startsWith("Bearer ")) {
             String token = header.substring(7);
             if (jwtUtil.isValid(token)) {
-                String loginId = jwtUtil.extractLoginId(token);
-                String role = jwtUtil.extractRole(token);
-                var auth = new UsernamePasswordAuthenticationToken(
-                        loginId, null, List.of(new SimpleGrantedAuthority("ROLE_" + role)));
+                Claims claims = jwtUtil.parseClaims(token);
+                String loginId = claims.getSubject();
+                String role = claims.get("role", String.class);
+                String societyId = claims.get("societyId", String.class);
+                String flatNumber = claims.get("flatNumber", String.class);
+                String fullName = claims.get("fullName", String.class);
+                
+                Object rawUserId = claims.get("userId");
+                Long userId = rawUserId instanceof Number ? ((Number) rawUserId).longValue() : 0L;
+
+                UserPrincipal principal = new UserPrincipal(
+                        userId,
+                        loginId,
+                        role,
+                        societyId,
+                        flatNumber,
+                        fullName,
+                        List.of(new SimpleGrantedAuthority("ROLE_" + role))
+                );
+
+                var auth = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
                 SecurityContextHolder.getContext().setAuthentication(auth);
             }
         }

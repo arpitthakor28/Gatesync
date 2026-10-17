@@ -37,6 +37,9 @@ public class User {
     private String flatNumber;
 
     @Column(nullable = false)
+    private String societyId = "SOC-101";
+
+    @Column(nullable = false)
     private boolean mustResetPassword = false;
 
     @Column(nullable = false)

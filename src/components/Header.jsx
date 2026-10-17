@@ -1,31 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
+import { DeviceSessionsModal } from './DeviceSessionsModal';
+import { NotificationCenterModal } from './NotificationCenterModal';
+import { NotificationPreferencesModal } from './NotificationPreferencesModal';
 import {
   Sun,
   Moon,
   Bell,
   Search,
-  User,
-  Shield,
-  CheckCircle2,
-  ChevronDown,
-  Sparkles,
   Clock,
-  Command
+  Command,
+  Smartphone,
+  LogOut,
+  Shield,
+  Menu,
+  CheckCircle2,
+  Settings
 } from 'lucide-react';
 
 export const Header = () => {
-  const { userRole, switchRole, currentUser, theme, toggleTheme, notifications } = useApp();
-  const [showNotifications, setShowNotifications] = useState(false);
+  const { userRole, switchRole, currentUser, theme, toggleTheme, setSidebarOpen } = useApp();
+  const { user, logout, isAuthenticated } = useAuth();
+  const { unreadCount } = useNotifications();
+
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [showPreferencesModal, setShowPreferencesModal] = useState(false);
+  const [showSessionsModal, setShowSessionsModal] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
-
-  // Update live clock every second
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
     <header style={{
@@ -35,17 +38,36 @@ export const Header = () => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      padding: '0 40px',
+      padding: '0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left))',
       position: 'sticky',
       top: 0,
       zIndex: 90,
-      backdropFilter: 'blur(16px)'
+      backdropFilter: 'blur(16px)',
+      WebkitBackdropFilter: 'blur(16px)'
     }}>
-      {/* Search Command Bar & Live Clock */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-        <div style={{
+      {/* Mobile Menu & Search Command Bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        {/* Mobile Sidebar Toggle Button */}
+        <button
+          onClick={() => setSidebarOpen && setSidebarOpen(prev => !prev)}
+          className="mobile-sidebar-toggle btn btn-secondary btn-sm"
+          style={{
+            minHeight: '44px',
+            minWidth: '44px',
+            padding: 0,
+            display: 'none', // Shown on <= 768px via CSS
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '12px'
+          }}
+          aria-label="Toggle Navigation Menu"
+        >
+          <Menu size={20} />
+        </button>
+
+        <div className="header-search-container" style={{
           position: 'relative',
-          width: '320px',
+          width: '280px',
           display: 'flex',
           alignItems: 'center'
         }}>
@@ -58,8 +80,9 @@ export const Header = () => {
               paddingLeft: '40px',
               paddingRight: '64px',
               width: '100%',
+              minHeight: '44px',
               fontSize: '0.85rem',
-              borderRadius: '20px',
+              borderRadius: '22px',
               backgroundColor: 'var(--bg-dark-input)'
             }}
           />
@@ -70,7 +93,7 @@ export const Header = () => {
             alignItems: 'center',
             gap: '2px',
             background: 'rgba(14, 165, 233, 0.1)',
-            padding: '2px 6px',
+            padding: '3px 8px',
             borderRadius: '6px',
             fontSize: '0.7rem',
             color: 'var(--color-primary)',
@@ -81,12 +104,13 @@ export const Header = () => {
         </div>
 
         {/* Live Date / Time Badge */}
-        <div style={{
+        <div className="header-clock-badge" style={{
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
-          padding: '6px 14px',
-          borderRadius: '20px',
+          minHeight: '44px',
+          padding: '0 14px',
+          borderRadius: '22px',
           background: 'rgba(224, 242, 254, 0.55)',
           border: '1px solid var(--border-glass)',
           fontSize: '0.8rem',
@@ -94,17 +118,17 @@ export const Header = () => {
           fontWeight: 600
         }}>
           <Clock size={14} style={{ color: 'var(--color-primary)' }} />
-          <span>{currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+          <span>{currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           <span style={{ color: 'var(--border-glass)' }}>|</span>
           <span>{currentTime.toLocaleDateString([], { day: 'numeric', month: 'short' })}</span>
         </div>
       </div>
 
       {/* Right Controls & Role Switcher */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
         
-        {/* Role Switcher Pill Bar */}
-        <div style={{
+        {/* Role Switcher Pill Bar (Calls real login to exercise JWTs) */}
+        <div className="header-role-switcher" style={{
           display: 'inline-flex',
           padding: '4px',
           borderRadius: '24px',
@@ -114,13 +138,17 @@ export const Header = () => {
           <button
             onClick={() => switchRole('admin')}
             style={{
-              padding: '6px 16px',
-              borderRadius: '20px',
+              minHeight: '36px',
+              padding: '0 14px',
+              borderRadius: '18px',
               fontSize: '0.8rem',
               fontWeight: 800,
               background: userRole === 'admin' ? 'var(--grad-primary)' : 'transparent',
               color: userRole === 'admin' ? '#ffffff' : 'var(--text-muted)',
-              boxShadow: userRole === 'admin' ? '0 2px 10px rgba(99, 102, 241, 0.3)' : 'none'
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: userRole === 'admin' ? '0 2px 10px rgba(14, 165, 233, 0.35)' : 'none',
+              touchAction: 'manipulation'
             }}
           >
             Admin
@@ -128,13 +156,17 @@ export const Header = () => {
           <button
             onClick={() => switchRole('member')}
             style={{
-              padding: '6px 16px',
-              borderRadius: '20px',
+              minHeight: '36px',
+              padding: '0 14px',
+              borderRadius: '18px',
               fontSize: '0.8rem',
               fontWeight: 800,
               background: userRole === 'member' ? 'var(--grad-success)' : 'transparent',
               color: userRole === 'member' ? '#ffffff' : 'var(--text-muted)',
-              boxShadow: userRole === 'member' ? '0 2px 10px rgba(16, 185, 129, 0.3)' : 'none'
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: userRole === 'member' ? '0 2px 10px rgba(16, 185, 129, 0.35)' : 'none',
+              touchAction: 'manipulation'
             }}
           >
             Resident
@@ -142,45 +174,74 @@ export const Header = () => {
           <button
             onClick={() => switchRole('staff')}
             style={{
-              padding: '6px 16px',
-              borderRadius: '20px',
+              minHeight: '36px',
+              padding: '0 14px',
+              borderRadius: '18px',
               fontSize: '0.8rem',
               fontWeight: 800,
               background: userRole === 'staff' ? 'var(--grad-warning)' : 'transparent',
               color: userRole === 'staff' ? '#ffffff' : 'var(--text-muted)',
-              boxShadow: userRole === 'staff' ? '0 2px 10px rgba(245, 158, 11, 0.3)' : 'none'
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: userRole === 'staff' ? '0 2px 10px rgba(245, 158, 11, 0.35)' : 'none',
+              touchAction: 'manipulation'
             }}
           >
             Guard
           </button>
         </div>
 
-        {/* Theme Toggle Button */}
+        {/* Device Sessions Button */}
         <button
-          onClick={toggleTheme}
+          onClick={() => setShowSessionsModal(true)}
           style={{
-            width: '42px',
-            height: '42px',
+            minHeight: '44px',
+            minWidth: '44px',
             borderRadius: '14px',
             background: 'var(--bg-dark-input)',
             border: '1px solid var(--border-glass)',
             color: 'var(--text-main)',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center'
+            justifyContent: 'center',
+            cursor: 'pointer',
+            touchAction: 'manipulation'
+          }}
+          title="Active Devices & Sessions"
+          aria-label="Active Devices"
+        >
+          <Smartphone size={18} style={{ color: 'var(--color-primary)' }} />
+        </button>
+
+        {/* Theme Toggle Button */}
+        <button
+          onClick={toggleTheme}
+          style={{
+            minHeight: '44px',
+            minWidth: '44px',
+            borderRadius: '14px',
+            background: 'var(--bg-dark-input)',
+            border: '1px solid var(--border-glass)',
+            color: 'var(--text-main)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            touchAction: 'manipulation'
           }}
           title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+          aria-label="Toggle Theme"
         >
-          {theme === 'dark' ? <Sun size={18} style={{ color: '#f59e0b' }} /> : <Moon size={18} style={{ color: '#6366f1' }} />}
+          {theme === 'dark' ? <Sun size={18} style={{ color: '#f59e0b' }} /> : <Moon size={18} style={{ color: '#0284c7' }} />}
         </button>
 
         {/* Notifications Dropdown */}
         <div style={{ position: 'relative' }}>
           <button
-            onClick={() => setShowNotifications(!showNotifications)}
+            onClick={() => setShowNotificationsModal(true)}
             style={{
-              width: '42px',
-              height: '42px',
+              minHeight: '44px',
+              minWidth: '44px',
               borderRadius: '14px',
               background: 'var(--bg-dark-input)',
               border: '1px solid var(--border-glass)',
@@ -188,72 +249,63 @@ export const Header = () => {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              position: 'relative'
+              position: 'relative',
+              cursor: 'pointer',
+              touchAction: 'manipulation'
             }}
+            aria-label="Notifications"
           >
             <Bell size={18} />
             {unreadCount > 0 && (
               <span style={{
                 position: 'absolute',
-                top: '-2px',
-                right: '-2px',
+                top: '4px',
+                right: '4px',
                 width: '18px',
                 height: '18px',
                 borderRadius: '50%',
-                backgroundColor: 'var(--color-danger)',
+                backgroundColor: 'var(--color-danger, #ef4444)',
                 color: '#ffffff',
                 fontSize: '0.65rem',
                 fontWeight: 800,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 0 8px var(--color-danger)'
+                boxShadow: '0 0 8px var(--color-danger, #ef4444)'
               }}>
                 {unreadCount}
               </span>
             )}
           </button>
-
-          {showNotifications && (
-            <div style={{
-              position: 'absolute',
-              right: 0,
-              top: '54px',
-              width: '340px',
-              backgroundColor: 'var(--bg-dark-modal)',
-              border: '1px solid var(--border-glass)',
-              borderRadius: '20px',
-              boxShadow: '0 20px 45px rgba(14, 165, 233, 0.22), 0 4px 14px rgba(0, 0, 0, 0.05)',
-              padding: '18px',
-              zIndex: 120
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                <span style={{ fontWeight: 800, fontSize: '0.92rem' }}>Activity Stream</span>
-                <span style={{ fontSize: '0.75rem', color: 'var(--color-primary)', cursor: 'pointer', fontWeight: 700 }}>Mark all read</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '260px', overflowY: 'auto' }}>
-                {notifications.map(n => (
-                  <div key={n.id} style={{
-                    padding: '12px',
-                    borderRadius: '12px',
-                    backgroundColor: 'var(--bg-dark-input)',
-                    fontSize: '0.82rem',
-                    borderLeft: `3px solid ${n.read ? 'var(--text-dim)' : 'var(--color-primary)'}`
-                  }}>
-                    <div style={{ color: 'var(--text-main)', fontWeight: 600 }}>{n.text}</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>{n.time}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
+
+        {/* Preferences / Settings Button */}
+        <button
+          onClick={() => setShowPreferencesModal(true)}
+          style={{
+            minHeight: '44px',
+            minWidth: '44px',
+            borderRadius: '14px',
+            background: 'var(--bg-dark-input)',
+            border: '1px solid var(--border-glass)',
+            color: 'var(--text-main)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            touchAction: 'manipulation'
+          }}
+          title="Notification Settings & Quiet Hours"
+          aria-label="Notification Settings"
+        >
+          <Settings size={18} style={{ color: 'var(--color-primary, #0284c7)' }} />
+        </button>
 
         {/* Divider */}
         <div style={{ width: '1px', height: '28px', backgroundColor: 'var(--border-glass)' }}></div>
 
-        {/* Profile Card */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {/* Profile Card & Logout */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{ position: 'relative' }}>
             <img
               src={currentUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'}
@@ -268,17 +320,56 @@ export const Header = () => {
             />
             <div className="pulse-dot" style={{ position: 'absolute', bottom: '0', right: '0', border: '2px solid var(--bg-dark-sidebar)' }}></div>
           </div>
-          <div>
+          <div className="header-profile-text">
             <div style={{ fontSize: '0.88rem', fontWeight: 800, lineHeight: 1.2 }}>
-              {currentUser?.username || 'Ashwin'}
+              {currentUser?.username || 'User'}
             </div>
             <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
               {userRole === 'admin' ? 'Administrator' : userRole === 'staff' ? 'Security Guard' : `Resident (${currentUser?.flat || 'A-101'})`}
             </div>
           </div>
+          {isAuthenticated && (
+            <button
+              onClick={logout}
+              style={{
+                minHeight: '44px',
+                minWidth: '44px',
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '12px'
+              }}
+              title="Log Out"
+              aria-label="Log Out"
+            >
+              <LogOut size={16} />
+            </button>
+          )}
         </div>
 
       </div>
+
+      {/* Device Sessions Modal */}
+      <DeviceSessionsModal
+        isOpen={showSessionsModal}
+        onClose={() => setShowSessionsModal(false)}
+      />
+
+      {/* Notification Center Modal */}
+      <NotificationCenterModal
+        isOpen={showNotificationsModal}
+        onClose={() => setShowNotificationsModal(false)}
+      />
+
+      {/* Notification Preferences Modal */}
+      <NotificationPreferencesModal
+        isOpen={showPreferencesModal}
+        onClose={() => setShowPreferencesModal(false)}
+      />
     </header>
   );
 };
