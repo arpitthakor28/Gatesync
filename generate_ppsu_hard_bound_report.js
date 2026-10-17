@@ -184,8 +184,8 @@ export function createReport() {
     ['Semester', '7th Semester'],
     ['Department / Domain', 'MERN Stack Developer'],
     ['Company / Organization', 'School of Engineering, P P Savani University'],
-    ['Mentor (Institute)', 'Ms. Shrijal Patel'],
-    ['Mentor (Company)', '-'],
+    ['Institute Mentor', 'Ms. Shrijal Patel'],
+    ['Company Mentor', '-'],
     ['Academic Year', '2026-2027']
   ];
 
@@ -233,7 +233,7 @@ export function createReport() {
   doc.moveDown(0.8);
 
   addParagraph(
-    'under the specialization domain of MERN Stack Developer. The project work encompasses complete architectural design, fullstack reactive implementation, progressive web application (PWA) engineering, multi-tenant isolation, real-time STOMP messaging, FCM push notification integration, and rigorous testing for the academic year 2026-2027.'
+    'under the specialization domain of MERN Stack Developer. The project work encompasses complete architectural design, fullstack reactive implementation, Progressive Web Application PWA engineering, multi-tenant isolation, real-time STOMP messaging, FCM push notification integration, and rigorous testing for the academic year 2026-2027.'
   );
 
   addParagraph(
@@ -727,8 +727,8 @@ export function createReport() {
 
   addSectionHeader('8.4', 'Live Implementation Screenshots');
   checkPageSpace(190);
-  const shot1 = path.join(process.cwd(), 'screenshots', '1_guard_registering_visitor.png');
-  const shot2 = path.join(process.cwd(), 'screenshots', '2_resident_live_alert_popup.png');
+  const shot1 = path.join(process.cwd(), 'screenshots', 'fresh_1_dashboard.png');
+  const shot2 = path.join(process.cwd(), 'screenshots', 'fresh_2_visitor_registry.png');
 
   if (fs.existsSync(shot1)) {
     doc.image(shot1, leftMargin + 10, doc.y, { width: 215 });
@@ -738,12 +738,12 @@ export function createReport() {
   }
   doc.moveDown(8.5);
   setItalicFont(10, cMuted);
-  doc.text('Figure 8.1: Guard Registration (Left)  |  Figure 8.2: Resident Live Pop-Up Alert (Right)', { align: 'center' });
+  doc.text('Figure 8.1: Executive Management Dashboard  |  Figure 8.2: Live Visitor Gate Security Desk', { align: 'center' });
   doc.moveDown(1.2);
 
   checkPageSpace(190);
-  const shot3 = path.join(process.cwd(), 'screenshots', '3_resident_approval_action.png');
-  const shot4 = path.join(process.cwd(), 'screenshots', '4_guard_queue_updated.png');
+  const shot3 = path.join(process.cwd(), 'screenshots', 'fresh_5_delivery_modal.png');
+  const shot4 = path.join(process.cwd(), 'screenshots', 'fresh_4_downloads_hub.png');
 
   if (fs.existsSync(shot3)) {
     doc.image(shot3, leftMargin + 10, doc.y, { width: 215 });
@@ -753,7 +753,7 @@ export function createReport() {
   }
   doc.moveDown(8.5);
   setItalicFont(10, cMuted);
-  doc.text('Figure 8.3: Resident Approval Action (Left)  |  Figure 8.4: Guard Queue Auto-Update (Right)', { align: 'center' });
+  doc.text('Figure 8.3: 1-Tap Fast Delivery Check-In Modal  |  Figure 8.4: GateSync Downloads & Reports Hub', { align: 'center' });
   doc.moveDown(1.2);
 
   // ==========================================
@@ -1009,11 +1009,24 @@ export function createReport() {
 
   writeStream.on('finish', () => {
     try {
+      const userDownloads1 = 'C:\\Users\\ASUS\\Downloads\\GateSync_Project_Report.pdf';
+      const userDownloads2 = 'C:\\Users\\ASUS\\Downloads\\GATESYNC_PPSU_Final_Hard_Bound_Project_Report.pdf';
+      const docxSource = path.join(process.cwd(), 'GATESYNC_PPSU_Final_Hard_Bound_Project_Report.docx');
+      const userDownloadsDocx = 'C:\\Users\\ASUS\\Downloads\\GATESYNC_PPSU_Final_Hard_Bound_Project_Report.docx';
+
+      fs.copyFileSync(outputFile, userDownloads1);
+      fs.copyFileSync(outputFile, userDownloads2);
+      if (fs.existsSync(docxSource)) {
+        fs.copyFileSync(docxSource, userDownloadsDocx);
+      }
       fs.copyFileSync(outputFile, publicOutputFile);
       fs.copyFileSync(outputFile, distOutputFile);
       fs.copyFileSync(outputFile, docsOutputFile);
       console.log('✅ Final Hard-Bound Project Report PDF successfully generated!');
       console.log(`Saved to: ${outputFile}`);
+      console.log(`Copied to: ${userDownloads1}`);
+      console.log(`Copied to: ${userDownloads2}`);
+      console.log(`Copied DOCX to: ${userDownloadsDocx}`);
       console.log(`Mirrored to: public/, dist/, and docs/`);
     } catch (e) {
       console.error('Error copying files:', e.message);

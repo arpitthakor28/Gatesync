@@ -32,15 +32,15 @@ const generatePDF = () => {
 
   doc.fillColor('#ffffff').fontSize(24).font('Helvetica-Bold').text('GATESYNC MANAGEMENT PLATFORM', 45, 32);
   doc.fontSize(13).font('Helvetica-Bold').fillColor('#38bdf8').text('SMART RESIDENTIAL SOCIETY & GATE SECURITY DESK — PROJECT REPORT', 45, 64);
-  doc.fontSize(9.5).font('Helvetica').fillColor('#94a3b8').text('P P Savani University | B.Tech Information Technology & Engineering (7th Sem)', 45, 88);
-  doc.fillColor('#e2e8f0').text('Candidate: Arpitsinh Thakor (Enrollment: 23SE02IE040) | Mentor: Ms. Shrijal Patel', 45, 106);
+  doc.fontSize(9.5).font('Helvetica').fillColor('#94a3b8').text('P P Savani University | B.Tech Information Technology & Engineering — 7th Semester', 45, 88);
+  doc.fillColor('#e2e8f0').text('Candidate: Arpitsinh Thakor | Enrollment: 23SE02IE040 | Mentor: Ms. Shrijal Patel', 45, 106);
 
   doc.moveDown(4);
 
   // --- ABSTRACT ---
   doc.fillColor(textColor).fontSize(16).font('Helvetica-Bold').text('1. Executive Abstract & System Overview', 45, 160);
   doc.fontSize(10).font('Helvetica').fillColor(mutedTextColor).text(
-    'GateSync (Gate & Society Management System) is a high-performance web platform engineered using React 19 and Google Material Design 3. The platform automates housing society governance, maintenance billing calculations, gate security visitor logging, notice broadcasts, and financial data exports.',
+    'GateSync is a high-performance web platform engineered using React 19 and Google Material Design 3. The platform automates housing society governance, maintenance billing calculations, gate security visitor logging, notice broadcasts, and financial data exports.',
     45, 185, { width: 500, align: 'justify', lineGap: 3 }
   );
 
@@ -48,9 +48,9 @@ const generatePDF = () => {
   doc.fillColor(textColor).fontSize(16).font('Helvetica-Bold').text('2. Core System Objectives', 45, 240);
 
   const bulletPoints = [
-    'Automate Maintenance Billing: Dynamic itemized bill generation (Block Maintenance, Electricity, Water).',
+    'Automate Maintenance Billing: Dynamic itemized bill generation for society maintenance, electricity, and water.',
     'Role-Based Portal Access: Distinct UI control desks for Admin Authority, Resident Portal, and Security Gate.',
-    'Security & Gate Registry: Real-time visitor entry/exit tracking with phone validation and privacy filters.',
+    'Security & Gate Registry: Real-time visitor entry and exit tracking with phone validation and privacy filters.',
     'GateSync Downloads Hub: Direct CSV exports for visitor logs, maintenance ledgers, and resident directories.'
   ];
 
@@ -64,27 +64,27 @@ const generatePDF = () => {
   // --- MODULE SPECIFICATIONS & IMAGES ---
   doc.fillColor(textColor).fontSize(16).font('Helvetica-Bold').text('3. UI Interface & Module Specifications', 45, 360);
 
-  const imgDir = 'C:\\Users\\ASUS\\.gemini\\antigravity-ide\\brain\\6077d917-2a51-4d17-a9fc-722d40a064c9';
+  const shotDir = path.join(process.cwd(), 'screenshots');
 
   // Dashboard UI Image
-  const dashboardImg = path.join(imgDir, 'm3_dashboard_ui_1790498630905.jpg');
+  const dashboardImg = path.join(shotDir, 'fresh_1_dashboard.png');
   if (fs.existsSync(dashboardImg)) {
     doc.fontSize(11).font('Helvetica-Bold').fillColor(secondaryColor).text('Module 3.1: Executive Dashboard Desk', 45, 390);
     doc.image(dashboardImg, 45, 410, { width: 500 });
   }
 
-  // Next Page for Billing & Visitor UI
+  // Next Page for Visitor & Downloads UI
   doc.addPage();
 
-  const billingImg = path.join(imgDir, 'm3_billing_ui_1790498655071.jpg');
-  if (fs.existsSync(billingImg)) {
-    doc.fontSize(11).font('Helvetica-Bold').fillColor(secondaryColor).text('Module 3.2: Maintenance Billing & Payment Ledger', 45, 45);
-    doc.image(billingImg, 45, 65, { width: 500 });
+  const visitorImg = path.join(shotDir, 'fresh_2_visitor_registry.png');
+  if (fs.existsSync(visitorImg)) {
+    doc.fontSize(11).font('Helvetica-Bold').fillColor(secondaryColor).text('Module 3.2: Live Visitor Security Registry Desk', 45, 45);
+    doc.image(visitorImg, 45, 65, { width: 500 });
   }
 
-  const downloadsImg = path.join(imgDir, 'm3_downloads_ui_1790498678602.jpg');
+  const downloadsImg = path.join(shotDir, 'fresh_4_downloads_hub.png');
   if (fs.existsSync(downloadsImg)) {
-    doc.fontSize(11).font('Helvetica-Bold').fillColor(secondaryColor).text('Module 3.3: GateSync Downloads Hub (CSV & APK Exporter)', 45, 340);
+    doc.fontSize(11).font('Helvetica-Bold').fillColor(secondaryColor).text('Module 3.3: GateSync Downloads Hub — CSV & Report Exporter', 45, 340);
     doc.image(downloadsImg, 45, 360, { width: 500 });
   }
 
@@ -137,7 +137,7 @@ const generatePDF = () => {
   for (let i = range.start; i < range.start + range.count; i++) {
     doc.switchToPage(i);
     doc.fontSize(8).fillColor('#888888').text(
-      `GateSync (Gate & Society Management System) — Page ${i + 1} of ${range.count}`,
+      `GateSync Smart Residential Society & Gate Security Platform — Page ${i + 1} of ${range.count}`,
       45, doc.page.height - 30, { align: 'center', width: 500 }
     );
   }
@@ -147,9 +147,9 @@ const generatePDF = () => {
   writeStreamProject.on('finish', () => {
     try {
       fs.copyFileSync(pdfPathProject, pdfPathPublic);
-      // also copy to backward-compatible legacy name
       fs.copyFileSync(pdfPathProject, path.join(process.cwd(), 'public', 'Society_Management_System_Project_Report.pdf'));
-      console.log('GateSync PDF successfully generated!');
+      fs.copyFileSync(pdfPathProject, 'C:\\Users\\ASUS\\Downloads\\GateSync_Project_Summary_Report.pdf');
+      console.log('GateSync Summary PDF successfully generated and copied to Downloads!');
     } catch (e) {
       console.log('PDF generated at project root.');
     }

@@ -139,6 +139,22 @@ export const GateSyncDownloadsView = () => {
     setTimeout(() => setDownloadedItem(null), 4000);
   };
 
+  const handleDownloadProjectPosterPDF = () => {
+    const base = import.meta.env.BASE_URL || '/';
+    const cleanBase = base.endsWith('/') ? base : base + '/';
+    const posterUrl = `${cleanBase}GATESYNC_Project_Poster_A2_1Page.pdf`;
+
+    const link = document.createElement('a');
+    link.href = posterUrl;
+    link.setAttribute('download', 'GATESYNC_Project_Poster_A2_1Page.pdf');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setDownloadedItem('GATESYNC_Project_Poster_A2_1Page.pdf');
+    setTimeout(() => setDownloadedItem(null), 4000);
+  };
+
   const handleDownloadRulesDoc = () => {
     const textContent = `==========================================================
 GATESYNC HOUSING SOCIETY GATE SECURITY & RESIDENT RULES
@@ -280,13 +296,13 @@ Issued: 2026-09-27 | System: GateSync M3 Suite
             </h3>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
               <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px', borderRadius: '8px', background: 'rgba(2, 132, 199, 0.12)', color: '#0369a1' }}>
-                Arpitsinh Thakor (23SE02IE040)
+                Arpitsinh Thakor • 23SE02IE040
               </span>
               <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px', borderRadius: '8px', background: 'rgba(16, 185, 129, 0.12)', color: '#047857' }}>
                 AY 2026-2027
               </span>
               <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px', borderRadius: '8px', background: 'rgba(99, 102, 241, 0.12)', color: '#4338ca' }}>
-                55 Pages (All 15 Chapters)
+                55 Pages — All 15 Chapters
               </span>
             </div>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
@@ -296,10 +312,13 @@ Issued: 2026-09-27 | System: GateSync M3 Suite
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <button onClick={handleDownloadProjectReportPDF} className="btn btn-primary" style={{ width: '100%', gap: '10px', fontWeight: 800 }}>
-              <FileDown size={18} /> Download Final Report (PDF - 55 Pages)
+              <FileDown size={18} /> Download Final Report PDF — 55 Pages
+            </button>
+            <button onClick={handleDownloadProjectPosterPDF} className="btn btn-secondary btn-sm" style={{ width: '100%', gap: '8px', fontSize: '0.82rem', background: '#fef2f2', color: '#991b1b', borderColor: '#fecdd3', fontWeight: 700 }}>
+              <FileDown size={14} /> Download Official Project Poster A2 PDF
             </button>
             <button onClick={handleDownloadProjectReportDocx} className="btn btn-secondary btn-sm" style={{ width: '100%', gap: '8px', fontSize: '0.8rem' }}>
-              <Download size={14} /> Download Word Format (.docx)
+              <Download size={14} /> Download Word Format .docx
             </button>
           </div>
         </div>

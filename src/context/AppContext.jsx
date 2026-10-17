@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { initialSeedData } from '../data/seedData';
 import confetti from 'canvas-confetti';
+import { useAuth } from './AuthContext';
 
 const AppContext = createContext();
 
