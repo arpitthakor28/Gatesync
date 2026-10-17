@@ -69,11 +69,11 @@ export const Header = () => {
             display: 'flex',
             alignItems: 'center',
             gap: '2px',
-            background: 'rgba(255, 255, 255, 0.08)',
+            background: 'rgba(14, 165, 233, 0.1)',
             padding: '2px 6px',
             borderRadius: '6px',
             fontSize: '0.7rem',
-            color: 'var(--text-dim)',
+            color: 'var(--color-primary)',
             fontWeight: 700
           }}>
             <Command size={10} /> K
@@ -87,10 +87,10 @@ export const Header = () => {
           gap: '8px',
           padding: '6px 14px',
           borderRadius: '20px',
-          background: 'rgba(255, 255, 255, 0.04)',
+          background: 'rgba(224, 242, 254, 0.55)',
           border: '1px solid var(--border-glass)',
           fontSize: '0.8rem',
-          color: 'var(--text-muted)',
+          color: 'var(--text-main)',
           fontWeight: 600
         }}>
           <Clock size={14} style={{ color: 'var(--color-primary)' }} />
@@ -223,7 +223,7 @@ export const Header = () => {
               backgroundColor: 'var(--bg-dark-modal)',
               border: '1px solid var(--border-glass)',
               borderRadius: '20px',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+              boxShadow: '0 20px 45px rgba(14, 165, 233, 0.22), 0 4px 14px rgba(0, 0, 0, 0.05)',
               padding: '18px',
               zIndex: 120
             }}>

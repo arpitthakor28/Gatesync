@@ -9,13 +9,18 @@ import {
   Home,
   Trash2,
   Lock,
-  X
+  X,
+  Edit3,
+  CheckCircle2,
+  Shield
 } from 'lucide-react';
 
 export const MembersView = () => {
-  const { data, userRole, addMember, deleteMember } = useApp();
+  const { data, userRole, addMember, updateMember, deleteMember } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingMember, setEditingMember] = useState(null);
 
   const [newMember, setNewMember] = useState({
     username: '',
@@ -39,6 +44,19 @@ export const MembersView = () => {
     addMember(newMember);
     setNewMember({ username: '', email: '', phone: '', flat: '', address: '', status: 'Owner' });
     setShowAddModal(false);
+  };
+
+  const handleOpenEdit = (member) => {
+    setEditingMember({ ...member });
+    setShowEditModal(true);
+  };
+
+  const handleEditSubmit = (e) => {
+    e.preventDefault();
+    if (!editingMember || !editingMember.username || !editingMember.flat) return;
+    updateMember(editingMember.id, editingMember);
+    setShowEditModal(false);
+    setEditingMember(null);
   };
 
   return (
@@ -112,15 +130,24 @@ export const MembersView = () => {
               </div>
             </div>
 
-            {/* Admin Only Delete Action */}
+            {/* Admin Actions */}
             {userRole === 'admin' && (
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px', pt: '12px', borderTop: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px', pt: '12px', borderTop: '1px solid var(--border-glass)' }}>
+                <button
+                  onClick={() => handleOpenEdit(member)}
+                  className="btn btn-secondary btn-sm"
+                  style={{ gap: '6px' }}
+                  title="Edit resident details"
+                >
+                  <Edit3 size={14} /> Edit
+                </button>
                 <button
                   onClick={() => deleteMember(member.id)}
                   className="btn btn-danger btn-sm"
+                  style={{ gap: '6px' }}
                   title="Remove member"
                 >
-                  <Trash2 size={14} /> Remove Member
+                  <Trash2 size={14} /> Remove
                 </button>
               </div>
             )}
@@ -134,7 +161,7 @@ export const MembersView = () => {
           <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
             <div className="modal-header">
               <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <UserPlus size={20} style={{ color: 'var(--primary)' }} /> Register New Resident Member
+                <UserPlus size={20} style={{ color: 'var(--color-primary)' }} /> Register New Resident Member
               </h3>
               <button className="modal-close" onClick={() => setShowAddModal(false)}><X size={20} /></button>
             </div>
@@ -215,6 +242,102 @@ export const MembersView = () => {
               <button type="submit" className="btn btn-primary" style={{ marginTop: '8px' }}>
                 Save Member Record
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Edit Resident Details (Admin Only) */}
+      {showEditModal && editingMember && userRole === 'admin' && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Edit3 size={20} style={{ color: 'var(--color-primary)' }} /> Edit Resident Details
+              </h3>
+              <button className="modal-close" onClick={() => setShowEditModal(false)}><X size={20} /></button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group">
+                <label className="form-label">Full Name</label>
+                <input
+                  type="text"
+                  value={editingMember.username}
+                  onChange={e => setEditingMember({ ...editingMember, username: e.target.value })}
+                  className="form-input"
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label">Email Address</label>
+                  <input
+                    type="email"
+                    value={editingMember.email}
+                    onChange={e => setEditingMember({ ...editingMember, email: e.target.value })}
+                    className="form-input"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Flat / Unit Number</label>
+                  <input
+                    type="text"
+                    value={editingMember.flat}
+                    onChange={e => setEditingMember({ ...editingMember, flat: e.target.value })}
+                    className="form-input"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label">Contact Phone</label>
+                  <input
+                    type="text"
+                    value={editingMember.phone || ''}
+                    onChange={e => setEditingMember({ ...editingMember, phone: e.target.value })}
+                    className="form-input"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Occupancy Status</label>
+                  <select
+                    value={editingMember.status || 'Owner'}
+                    onChange={e => setEditingMember({ ...editingMember, status: e.target.value })}
+                    className="form-select"
+                  >
+                    <option value="Owner">Flat Owner</option>
+                    <option value="Tenant">Registered Tenant</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Address</label>
+                <input
+                  type="text"
+                  value={editingMember.address || ''}
+                  onChange={e => setEditingMember({ ...editingMember, address: e.target.value })}
+                  className="form-input"
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="btn btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ gap: '6px' }}>
+                  <CheckCircle2 size={16} /> Update Resident Record
+                </button>
+              </div>
             </form>
           </div>
         </div>

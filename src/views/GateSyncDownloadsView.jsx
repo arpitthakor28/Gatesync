@@ -150,10 +150,10 @@ Issued: 2026-09-27 | System: GateSync M3 Suite
       
       {/* Header Banner */}
       <div style={{
-        background: 'linear-gradient(135deg, rgba(124, 77, 255, 0.15) 0%, rgba(101, 31, 255, 0.05) 100%)',
+        background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.15) 0%, rgba(224, 242, 254, 0.5) 100%)',
         borderRadius: '24px',
         padding: '32px',
-        border: '1px solid var(--m3-outline)',
+        border: '1px solid var(--border-glass)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -230,8 +230,11 @@ Issued: 2026-09-27 | System: GateSync M3 Suite
           justify: 'space-between',
           gap: '20px',
           padding: '24px',
-          border: '1px solid var(--m3-primary)',
-          background: 'linear-gradient(145deg, rgba(101, 31, 255, 0.12) 0%, rgba(18, 14, 46, 0.6) 100%)'
+          border: '1px solid var(--border-glass)',
+          background: 'linear-gradient(145deg, rgba(255, 255, 255, 0.88) 0%, rgba(240, 249, 255, 0.75) 100%)',
+          backdropFilter: 'blur(20px)',
+          borderRadius: '24px',
+          boxShadow: 'var(--shadow-card)'
         }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
@@ -239,18 +242,18 @@ Issued: 2026-09-27 | System: GateSync M3 Suite
                 width: '46px',
                 height: '46px',
                 borderRadius: '14px',
-                backgroundColor: 'rgba(101, 31, 255, 0.3)',
-                color: '#ffffff',
+                backgroundColor: 'rgba(14, 165, 233, 0.16)',
+                color: 'var(--color-primary)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 4px 12px rgba(101, 31, 255, 0.4)'
+                boxShadow: '0 4px 14px rgba(14, 165, 233, 0.2)'
               }}>
                 <FileText size={24} />
               </div>
               <span className="badge badge-primary" style={{ padding: '4px 12px', fontSize: '0.8rem' }}>Master PDF Report</span>
             </div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 900, marginBottom: '8px', color: '#ffffff' }}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 900, marginBottom: '8px', color: 'var(--text-main)' }}>
               Project Report Document (PDF)
             </h3>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
@@ -258,7 +261,7 @@ Issued: 2026-09-27 | System: GateSync M3 Suite
             </p>
           </div>
           
-          <button onClick={handleDownloadProjectReportPDF} className="btn btn-primary" style={{ width: '100%', gap: '10px', background: 'linear-gradient(135deg, var(--m3-primary) 0%, #651fff 100%)' }}>
+          <button onClick={handleDownloadProjectReportPDF} className="btn btn-primary" style={{ width: '100%', gap: '10px' }}>
             <FileDown size={18} /> Download Project Report (PDF)
           </button>
         </div>

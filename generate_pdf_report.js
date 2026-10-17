@@ -8,9 +8,9 @@ const generatePDF = () => {
     size: 'A4',
     bufferPages: true,
     info: {
-      Title: 'GateSync - Gate & Society Management System Project Report',
-      Author: 'Bhavesh Ghanchi, Soham Dubewar, Ashwin Nair',
-      Subject: 'Software Engineering Project Report'
+      Title: 'GateSync - Smart Society & Gate Security Management Platform Project Report',
+      Author: 'Arpitsinh Thakor (23SE02IE040)',
+      Subject: 'Software Engineering & Final Project Report'
     }
   });
 
@@ -20,20 +20,20 @@ const generatePDF = () => {
   const writeStreamProject = fs.createWriteStream(pdfPathProject);
   doc.pipe(writeStreamProject);
 
-  // Styling palette
-  const primaryColor = '#651fff';
-  const secondaryColor = '#7c4dff';
-  const textColor = '#1a1a1a';
-  const mutedTextColor = '#555555';
-  const cardBg = '#f4f2ff';
+  // AI Sky Blue & Navy Styling palette
+  const primaryColor = '#0284c7';
+  const secondaryColor = '#0ea5e9';
+  const textColor = '#0c1e33';
+  const mutedTextColor = '#47617d';
+  const cardBg = '#f0f9ff';
 
   // --- COVER / HEADER ---
-  doc.rect(0, 0, doc.page.width, 140).fill('#120e2e');
+  doc.rect(0, 0, doc.page.width, 140).fill('#0c1e33');
 
-  doc.fillColor('#ffffff').fontSize(24).font('Helvetica-Bold').text('GATESYNC MANAGEMENT SYSTEM', 45, 35);
-  doc.fontSize(14).font('Helvetica').fillColor('#b388ff').text('GATESYNC SUITE & GATE SECURITY DESK — PROJECT REPORT', 45, 68);
-  doc.fontSize(10).fillColor('#cccccc').text('Document Version 2.0.0 | Material Design 3 React Suite', 45, 92);
-  doc.text('Contributors: Bhavesh Ghanchi, Soham Dubewar, Ashwin Nair', 45, 108);
+  doc.fillColor('#ffffff').fontSize(24).font('Helvetica-Bold').text('GATESYNC MANAGEMENT PLATFORM', 45, 32);
+  doc.fontSize(13).font('Helvetica-Bold').fillColor('#38bdf8').text('SMART RESIDENTIAL SOCIETY & GATE SECURITY DESK — PROJECT REPORT', 45, 64);
+  doc.fontSize(9.5).font('Helvetica').fillColor('#94a3b8').text('P P Savani University | B.Tech Information Technology & Engineering (7th Sem)', 45, 88);
+  doc.fillColor('#e2e8f0').text('Candidate: Arpitsinh Thakor (Enrollment: 23SE02IE040) | Mentor: Ms. Shrijal Patel', 45, 106);
 
   doc.moveDown(4);
 

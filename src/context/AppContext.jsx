@@ -31,9 +31,13 @@ export const AppProvider = ({ children }) => {
     return initialSeedData.admin[0];
   });
 
-  // Dark mode theme state
+  // Modern Theme state - default to AI White & Sky Blue ('light')
   const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('hms_theme') || 'dark';
+    const saved = localStorage.getItem('hms_theme');
+    if (!saved || saved === 'dark') {
+      return 'light';
+    }
+    return saved;
   });
 
   // Notifications list
@@ -132,6 +136,14 @@ export const AppProvider = ({ children }) => {
     };
     setData(prev => ({ ...prev, staff: [newStaffItem, ...prev.staff] }));
     addNotification(`New staff member ${staffObj.username} registered.`);
+  };
+
+  const updateStaff = (id, updatedFields) => {
+    setData(prev => ({
+      ...prev,
+      staff: prev.staff.map(s => s.id === id ? { ...s, ...updatedFields } : s)
+    }));
+    addNotification(`Staff member details updated.`);
   };
 
   const deleteStaff = (id) => {
@@ -287,6 +299,7 @@ export const AppProvider = ({ children }) => {
       updateMember,
       deleteMember,
       addStaff,
+      updateStaff,
       deleteStaff,
       createBill,
       payBill,

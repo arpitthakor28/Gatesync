@@ -46,11 +46,11 @@ export const DashboardView = () => {
       {/* Welcome Banner */}
       <div className="glass-card" style={{
         background: userRole === 'admin' 
-          ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(139, 92, 246, 0.15) 50%, rgba(217, 70, 239, 0.1) 100%)'
+          ? 'linear-gradient(135deg, rgba(14, 165, 233, 0.2) 0%, rgba(2, 132, 199, 0.1) 50%, rgba(224, 242, 254, 0.5) 100%)'
           : userRole === 'staff'
-          ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(217, 119, 6, 0.15) 100%)'
-          : 'linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(5, 150, 105, 0.15) 100%)',
-        border: `1px solid ${userRole === 'admin' ? 'rgba(99, 102, 241, 0.4)' : userRole === 'staff' ? 'rgba(245, 158, 11, 0.4)' : 'rgba(16, 185, 129, 0.4)'}`,
+          ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.1) 100%)'
+          : 'linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.1) 100%)',
+        border: `1px solid ${userRole === 'admin' ? 'rgba(14, 165, 233, 0.4)' : userRole === 'staff' ? 'rgba(245, 158, 11, 0.4)' : 'rgba(16, 185, 129, 0.4)'}`,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',

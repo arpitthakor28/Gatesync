@@ -124,12 +124,12 @@ export const Sidebar = () => {
           width: '46px',
           height: '46px',
           borderRadius: '16px',
-          background: 'linear-gradient(135deg, var(--m3-primary) 0%, #651fff 100%)',
+          background: 'linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           color: '#ffffff',
-          boxShadow: '0 4px 16px rgba(124, 77, 255, 0.4)'
+          boxShadow: '0 4px 18px rgba(14, 165, 233, 0.45)'
         }}>
           <Building2 size={26} />
         </div>
@@ -184,9 +184,10 @@ export const Sidebar = () => {
                     padding: '12px 16px',
                     borderRadius: '28px',
                     backgroundColor: isActive ? 'var(--m3-primary-container)' : 'transparent',
-                    border: isActive ? '1px solid rgba(124, 77, 255, 0.4)' : '1px solid transparent',
+                    border: isActive ? '1px solid rgba(14, 165, 233, 0.5)' : '1px solid transparent',
                     color: isActive ? '#ffffff' : 'var(--text-primary)',
-                    fontWeight: isActive ? 800 : 500,
+                    boxShadow: isActive ? '0 4px 18px rgba(14, 165, 233, 0.35)' : 'none',
+                    fontWeight: isActive ? 800 : 600,
                     fontSize: '0.9rem',
                     transition: 'all 0.15s ease'
                   }}
@@ -198,12 +199,12 @@ export const Sidebar = () => {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <Icon size={20} style={{ color: isActive ? 'var(--m3-primary)' : 'var(--text-secondary)' }} />
+                    <Icon size={20} style={{ color: isActive ? '#ffffff' : 'var(--color-primary)' }} />
                     <span>{item.label}</span>
                   </div>
                   {item.badge !== undefined && item.badge > 0 && (
                     <span style={{
-                      backgroundColor: isActive ? 'var(--m3-primary)' : 'var(--m3-sys-color-surface-container-highest)',
+                      backgroundColor: isActive ? 'rgba(255, 255, 255, 0.25)' : 'rgba(14, 165, 233, 0.15)',
                       color: isActive ? '#ffffff' : 'var(--m3-primary)',
                       padding: '2px 10px',
                       borderRadius: '12px',
