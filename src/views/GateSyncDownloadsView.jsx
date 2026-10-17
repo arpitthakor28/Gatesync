@@ -108,14 +108,34 @@ export const GateSyncDownloadsView = () => {
   };
 
   const handleDownloadProjectReportPDF = () => {
+    const base = import.meta.env.BASE_URL || '/';
+    const cleanBase = base.endsWith('/') ? base : base + '/';
+    const pdfUrl = `${cleanBase}GateSync_Project_Report.pdf`;
+
     const link = document.createElement('a');
-    link.href = '/GateSync_Project_Report.pdf';
-    link.setAttribute('download', 'GateSync_Project_Report.pdf');
+    link.href = pdfUrl;
+    link.setAttribute('download', 'GATESYNC_PPSU_Final_Hard_Bound_Project_Report.pdf');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 
-    setDownloadedItem('GateSync_Project_Report.pdf');
+    setDownloadedItem('GateSync_Project_Report.pdf (55 Pages)');
+    setTimeout(() => setDownloadedItem(null), 4000);
+  };
+
+  const handleDownloadProjectReportDocx = () => {
+    const base = import.meta.env.BASE_URL || '/';
+    const cleanBase = base.endsWith('/') ? base : base + '/';
+    const docxUrl = `${cleanBase}GATESYNC_PPSU_Final_Hard_Bound_Project_Report.docx`;
+
+    const link = document.createElement('a');
+    link.href = docxUrl;
+    link.setAttribute('download', 'GATESYNC_PPSU_Final_Hard_Bound_Project_Report.docx');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setDownloadedItem('GATESYNC_PPSU_Final_Hard_Bound_Project_Report.docx');
     setTimeout(() => setDownloadedItem(null), 4000);
   };
 
@@ -251,19 +271,37 @@ Issued: 2026-09-27 | System: GateSync M3 Suite
               }}>
                 <FileText size={24} />
               </div>
-              <span className="badge badge-primary" style={{ padding: '4px 12px', fontSize: '0.8rem' }}>Master PDF Report</span>
+              <span className="badge badge-primary" style={{ padding: '4px 12px', fontSize: '0.8rem', background: '#0284c7', color: '#ffffff' }}>
+                PPSU NAAC A+ Format
+              </span>
             </div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 900, marginBottom: '8px', color: 'var(--text-main)' }}>
-              Project Report Document (PDF)
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 900, marginBottom: '6px', color: 'var(--text-main)' }}>
+              Final Hard-Bound Project Report
             </h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px', borderRadius: '8px', background: 'rgba(2, 132, 199, 0.12)', color: '#0369a1' }}>
+                Arpitsinh Thakor (23SE02IE040)
+              </span>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px', borderRadius: '8px', background: 'rgba(16, 185, 129, 0.12)', color: '#047857' }}>
+                AY 2026-2027
+              </span>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px', borderRadius: '8px', background: 'rgba(99, 102, 241, 0.12)', color: '#4338ca' }}>
+                55 Pages (All 15 Chapters)
+              </span>
+            </div>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              Official Software Engineering Project Report for GateSync featuring system architecture, UI screenshots, and QA matrix.
+              Official P P Savani University School of Engineering Hard-Bound Project Report in Cambria 12pt justified font, with university logos, sequence diagrams, live screenshots, and QA test matrices.
             </p>
           </div>
           
-          <button onClick={handleDownloadProjectReportPDF} className="btn btn-primary" style={{ width: '100%', gap: '10px' }}>
-            <FileDown size={18} /> Download Project Report (PDF)
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <button onClick={handleDownloadProjectReportPDF} className="btn btn-primary" style={{ width: '100%', gap: '10px', fontWeight: 800 }}>
+              <FileDown size={18} /> Download Final Report (PDF - 55 Pages)
+            </button>
+            <button onClick={handleDownloadProjectReportDocx} className="btn btn-secondary btn-sm" style={{ width: '100%', gap: '8px', fontSize: '0.8rem' }}>
+              <Download size={14} /> Download Word Format (.docx)
+            </button>
+          </div>
         </div>
         
         {/* Visitor Logs CSV Export */}
