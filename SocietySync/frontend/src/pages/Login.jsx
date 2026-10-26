@@ -66,9 +66,34 @@ export default function Login() {
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
-      <p style={{ marginTop: 24, fontSize: 12, color: '#64748b', textAlign: 'center' }}>
-        Default admin: <code>admin</code> / <code>admin123</code> (forced reset on first login)
-      </p>
+      <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid rgba(186, 230, 253, 0.6)' }}>
+        <p style={{ margin: '0 0 10px 0', fontSize: 13, fontWeight: 600, color: '#334155', textAlign: 'center' }}>
+          Instant 1-Click Demo Portals:
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => { setLoginId('admin'); setPassword('admin123'); login('admin', 'admin123').then(r => navigate('/admin')); }}
+            style={{ padding: '8px 4px', fontSize: 12, fontWeight: 600, borderRadius: 8, border: '1px solid #bae6fd', background: '#f0f9ff', color: '#0369a1', cursor: 'pointer' }}
+          >
+            🛡️ Admin
+          </button>
+          <button
+            type="button"
+            onClick={() => { setLoginId('A101'); setPassword('resident123'); login('A101', 'resident123').then(r => navigate('/resident')); }}
+            style={{ padding: '8px 4px', fontSize: 12, fontWeight: 600, borderRadius: 8, border: '1px solid #bae6fd', background: '#f0f9ff', color: '#0369a1', cursor: 'pointer' }}
+          >
+            🏠 Resident
+          </button>
+          <button
+            type="button"
+            onClick={() => { setLoginId('guard1'); setPassword('guard123'); login('guard1', 'guard123').then(r => navigate('/guard')); }}
+            style={{ padding: '8px 4px', fontSize: 12, fontWeight: 600, borderRadius: 8, border: '1px solid #bae6fd', background: '#f0f9ff', color: '#0369a1', cursor: 'pointer' }}
+          >
+            👮 Guard
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

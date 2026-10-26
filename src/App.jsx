@@ -17,7 +17,6 @@ import { StaffView } from './views/StaffView';
 import { HomeServicesView } from './views/HomeServicesView';
 import { EventCalendarView } from './views/EventCalendarView';
 import { NeighborhoodView } from './views/NeighborhoodView';
-import { GateSyncDownloadsView } from './views/GateSyncDownloadsView';
 
 const MainLayout = () => {
   const { activeTab, setActiveTab } = useApp();
@@ -54,8 +53,6 @@ const MainLayout = () => {
         return <EventCalendarView />;
       case 'neighborhood':
         return <NeighborhoodView />;
-      case 'downloads':
-        return <GateSyncDownloadsView />;
       default:
         return <DashboardView />;
     }

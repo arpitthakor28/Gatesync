@@ -14,7 +14,6 @@ import {
   Building2,
   Lock,
   Sparkles,
-  Download,
   X
 } from 'lucide-react';
 
@@ -91,13 +90,7 @@ export const Sidebar = () => {
       label: 'Neighborhood Guide', 
       icon: MapPin, 
       roles: ['admin', 'member', 'staff'] 
-    },
-    { 
-      id: 'downloads', 
-      label: 'GateSync Downloads', 
-      icon: Download, 
-      roles: ['admin', 'member', 'staff'] 
-    },
+    }
   ];
 
   const filteredNavItems = navItems.filter(item => item.roles.includes(userRole));

@@ -11,6 +11,11 @@ export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [incomingVisitor, setIncomingVisitor] = useState(null);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.__setIncomingVisitor = setIncomingVisitor;
+    }
+  }, [setIncomingVisitor]);
   const [preferences, setPreferences] = useState({
     soundEnabled: true,
     vibrationEnabled: true,

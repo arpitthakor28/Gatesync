@@ -4,6 +4,9 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   base: '/Gatesync/',
+  define: {
+    global: 'window',
+  },
   plugins: [
     react(),
     VitePWA({
@@ -50,7 +53,7 @@ export default defineConfig({
     port: 3000,
     open: false,
     watch: {
-      ignored: ['**/SocietySync/**', '**/legacy_php_system/**']
+      ignored: ['**/SocietySync/**', '**/legacy_php_system/**', '**/scratch/**']
     }
   }
 });
