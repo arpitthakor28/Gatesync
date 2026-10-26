@@ -17,6 +17,13 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     
+    <!-- GitHub Pages Auto-Resolver: Redirects root to /docs/ if hosted on static GitHub Pages root -->
+    <script>
+      if (window.location.hostname.endsWith('github.io') && !window.location.pathname.includes('/docs')) {
+        var baseDocs = window.location.pathname.replace(/\/+$/, '') + '/docs/';
+        window.location.replace(baseDocs + window.location.search + window.location.hash);
+      }
+    </script>
     <!-- Polyfill global for libraries like sockjs-client -->
     <script>
       if (typeof global === 'undefined') {
