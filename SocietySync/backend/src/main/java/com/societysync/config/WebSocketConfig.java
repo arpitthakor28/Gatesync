@@ -3,6 +3,7 @@ package com.societysync.config;
 import com.societysync.security.JwtUtil;
 import com.societysync.security.UserPrincipal;
 import io.jsonwebtoken.Claims;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -14,6 +15,7 @@ import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
@@ -33,10 +35,20 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         this.jwtUtil = jwtUtil;
     }
 
+    @Bean
+    public ThreadPoolTaskScheduler messageBrokerTaskScheduler() {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(1);
+        scheduler.setThreadNamePrefix("ws-heartbeat-");
+        scheduler.initialize();
+        return scheduler;
+    }
+
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
         // Simple broker for public society broadcasts and private user queues
         registry.enableSimpleBroker("/topic", "/queue")
+                .setTaskScheduler(messageBrokerTaskScheduler())
                 .setHeartbeatValue(new long[]{10000, 10000}); // 10s ping/pong heartbeat
         registry.setApplicationDestinationPrefixes("/app");
         registry.setUserDestinationPrefix("/user");
