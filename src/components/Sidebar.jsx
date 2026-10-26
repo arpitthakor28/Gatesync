@@ -153,7 +153,7 @@ export const Sidebar = () => {
             </div>
             <div>
               <div style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.15 }}>
-                GateSync <span style={{ color: 'var(--m3-primary)', fontSize: '0.85rem' }}>PWA</span>
+                GateSync
               </div>
               <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
                 Residential Society Suite
@@ -262,9 +262,6 @@ export const Sidebar = () => {
           flexDirection: 'column',
           gap: '10px'
         }}>
-          <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
-            <Lock size={12} style={{ color: 'var(--m3-tertiary)' }} /> JWT Multi-Tenant Shield Active
-          </div>
           <button
             onClick={resetToDefaultSeed}
             className="btn btn-secondary btn-sm"
