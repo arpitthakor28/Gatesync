@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
-  base: '/Gatesync/',
+  base: '/sms1/',
   define: {
     global: 'window',
   },
@@ -23,8 +23,8 @@ export default defineConfig({
         background_color: '#f0f9ff',
         display: 'standalone',
         orientation: 'portrait-primary',
-        start_url: '/Gatesync/',
-        scope: '/Gatesync/',
+        start_url: '/sms1/',
+        scope: '/sms1/',
         icons: [
           {
             src: 'icons/icon-192.png',
